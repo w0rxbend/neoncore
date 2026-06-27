@@ -1,0 +1,160 @@
+#pragma once
+
+#include <Arduino.h>
+#include <ESP8266WiFi.h>
+
+#include "LedMatrixController.h"
+#include "MatrixProtocol.h"
+
+// Coordinates Wi-Fi, TCP transport, protocol parsing, and matrix command
+// dispatch.
+//
+// This class intentionally owns all network state. The main Arduino loop only
+// calls loop(), while this class decides whether to reconnect Wi-Fi, restart the
+// listener, accept a client, read bytes, and dispatch parsed commands.
+class TcpMatrixServer {
+ public:
+  explicit TcpMatrixServer(LedMatrixController& matrix);
+
+  // Starts Wi-Fi and starts the TCP listener if the network is ready.
+  void begin();
+
+  // Must be called repeatedly from Arduino loop(). It never blocks for long.
+  void loop();
+
+ private:
+  enum class EffectMode : uint8_t {
+    kDirect = 0,
+    kStatic,
+    kChase,
+    kColorWipe,
+    kBlink,
+    kWave,
+    kRain,
+    kMeteor,
+    kRainbow,
+    kBreathing,
+    kScanner,
+    kSparkle,
+    kFire,
+    kMatrixRain,
+    kRipple,
+    kTheaterChase,
+    kTwinkle,
+    kComet,
+    kPlasma,
+    kDiagonal,
+    kBorderChase,
+    kHeartbeat,
+    kPulseWipe,
+    kConfetti,
+    kCustom
+  };
+
+  // Network startup and retry helpers.
+  void startWifi();
+  void beginStationConnect();
+  void startAccessPoint();
+  void handleWifiReconnect();
+  bool hasStationCredentials() const;
+  bool networkIsReady() const;
+  IPAddress currentIpAddress() const;
+  void printNetworkAddress() const;
+
+  // TCP listener lifecycle helpers.
+  void ensureServerRunning();
+  void startServer();
+  void stopServer();
+  void restartServer();
+  void acceptClientIfNeeded();
+  void readClientBytes();
+
+  // Streaming parser helpers.
+  void resetParser();
+  void parseByte(uint8_t value);
+  void processFrame();
+
+  // Converts a validated protocol frame into LED operations.
+  MatrixProtocol::Status applyCommand(uint8_t command, const uint8_t* payload, uint8_t length);
+
+  // Sends the compact 6-byte response frame back to the current TCP client.
+  void sendStatus(MatrixProtocol::Status status);
+
+  // Animation engine.
+  void updateAnimations();
+  void stopEffects();
+  void startEffect(EffectMode mode, uint16_t intervalMs, uint8_t red, uint8_t green, uint8_t blue);
+  bool applyCustomFrame(uint8_t frameIndex, uint8_t frameCount, uint16_t delayMs,
+                       const uint8_t* frameData);
+  void renderEffectFrame(uint32_t nowMs);
+  void renderStatic(uint32_t nowMs);
+  void renderChase(uint32_t nowMs);
+  void renderColorWipe(uint32_t nowMs);
+  void renderBlink(uint32_t nowMs);
+  void renderWave(uint32_t nowMs);
+  void renderRain(uint32_t nowMs);
+  void renderMeteor(uint32_t nowMs);
+  void renderRainbow(uint32_t nowMs);
+  void renderBreathing(uint32_t nowMs);
+  void renderScanner(uint32_t nowMs);
+  void renderSparkle(uint32_t nowMs);
+  void renderFire(uint32_t nowMs);
+  void renderMatrixRain(uint32_t nowMs);
+  void renderRipple(uint32_t nowMs);
+  void renderTheaterChase(uint32_t nowMs);
+  void renderTwinkle(uint32_t nowMs);
+  void renderComet(uint32_t nowMs);
+  void renderPlasma(uint32_t nowMs);
+  void renderDiagonal(uint32_t nowMs);
+  void renderBorderChase(uint32_t nowMs);
+  void renderHeartbeat(uint32_t nowMs);
+  void renderPulseWipe(uint32_t nowMs);
+  void renderConfetti(uint32_t nowMs);
+  void renderCustom(uint32_t nowMs);
+
+  // Demo loop: auto-plays a preset sequence on boot until overridden by TCP.
+  void updateDemoLoop(uint32_t nowMs);
+  void startDemoStep(uint32_t nowMs);
+
+  // Matrix is injected so network code does not own LED hardware directly.
+  LedMatrixController& matrix_;
+
+  // ESP8266 TCP server/client objects. One connected client is enough for this
+  // controller and keeps RAM use predictable.
+  WiFiServer server_;
+  WiFiClient client_;
+
+  // Parser state for one in-progress command frame.
+  uint8_t frameBuffer_[MatrixProtocol::kMaxFrameSize];
+  uint16_t frameIndex_;
+  uint16_t expectedFrameSize_;
+
+  // Retry/health state.
+  bool serverStarted_;
+  uint32_t lastWifiRetryMs_;
+  uint32_t lastServerHealthCheckMs_;
+
+  // Non-blocking animation state.
+  EffectMode effectMode_;
+  uint16_t effectIntervalMs_;
+  uint32_t lastEffectStepMs_;
+  uint8_t effectPhase_;
+  uint8_t effectColorRed_;
+  uint8_t effectColorGreen_;
+  uint8_t effectColorBlue_;
+  bool effectBlinkState_;
+  uint32_t effectSeed_;
+
+  // Custom animation state: one slot with multiple frames.
+  uint8_t customFrameCount_;
+  uint8_t customFrameExpectedCount_;
+  uint16_t customFrameDelayMs_[AppConfig::kMaxCustomFrames];
+  uint8_t customReceivedMask_;
+  uint8_t customCurrentFrame_;
+  uint8_t customFrameBuffer_[AppConfig::kMaxCustomFrames][AppConfig::kLedCount * 3];
+
+  // Demo loop state.
+  bool demoLoopActive_;
+  uint8_t demoStepIndex_;
+  uint32_t demoStepStartMs_;
+};
