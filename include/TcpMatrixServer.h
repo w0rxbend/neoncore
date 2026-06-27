@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Arduino.h>
-#include <ESP8266WiFi.h>
+#include <WiFi.h>
 
 #include "LedMatrixController.h"
 #include "MatrixProtocol.h"
@@ -119,7 +119,7 @@ class TcpMatrixServer {
   // Matrix is injected so network code does not own LED hardware directly.
   LedMatrixController& matrix_;
 
-  // ESP8266 TCP server/client objects. One connected client is enough for this
+  // TCP server/client objects. One connected client is enough for this
   // controller and keeps RAM use predictable.
   WiFiServer server_;
   WiFiClient client_;

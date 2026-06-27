@@ -8,8 +8,8 @@
 #include "creds.h"
 #endif
 
-#ifndef D2
-#define D2 4
+#ifndef LED_PIN
+#define LED_PIN 4
 #endif
 
 #ifndef WIFI_SSID
@@ -34,8 +34,8 @@
 
 namespace AppConfig {
 
-// Hardware layout for the current ESP8266 + WS2812B 4x4 build.
-constexpr uint8_t kLedPin = D2;
+// Hardware layout for the current ESP32 + WS2812B 4x4 build.
+constexpr uint8_t kLedPin = LED_PIN;
 constexpr uint8_t kMatrixWidth = 4;
 constexpr uint8_t kMatrixHeight = 4;
 constexpr uint16_t kLedCount = kMatrixWidth * kMatrixHeight;
@@ -51,7 +51,7 @@ constexpr uint32_t kBootSettleDelayMs = 2000;
 // Network behavior. Empty WIFI_SSID falls back to AP mode.
 constexpr uint16_t kTcpPort = 7777;
 constexpr char kAccessPointSsid[] = "led-matrix";
-constexpr uint32_t kStationConnectTimeoutMs = 15000;
+constexpr uint32_t kStationConnectTimeoutMs = 60000;
 constexpr uint32_t kWifiRetryIntervalMs = 10000;
 constexpr uint32_t kServerHealthCheckIntervalMs = 5000;
 constexpr uint8_t kMaxCustomFrames = 8;

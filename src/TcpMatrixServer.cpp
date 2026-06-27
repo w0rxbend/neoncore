@@ -42,7 +42,7 @@ void scanNetworks() {
     Serial.print(" dBm  CH: ");
     Serial.print(WiFi.channel(i));
     Serial.print("  ENC: ");
-    Serial.println(WiFi.encryptionType(i) == ENC_TYPE_NONE ? "open" : "secured");
+    Serial.println(WiFi.encryptionType(i) == WIFI_AUTH_OPEN ? "open" : "secured");
   }
   WiFi.scanDelete();
 }
@@ -262,6 +262,7 @@ void TcpMatrixServer::startWifi() {
   Serial.println("\"");
 
   scanNetworks();
+
   beginStationConnect();
 
   Serial.print("Connecting to Wi-Fi");
@@ -284,38 +285,6 @@ void TcpMatrixServer::startWifi() {
 
 void TcpMatrixServer::beginStationConnect() {
   lastWifiRetryMs_ = millis();
-
-#ifdef WIFI_MAC_OVERRIDE
-  {
-    uint8_t mac[] = WIFI_MAC_OVERRIDE;
-    wifi_set_macaddr(STATION_IF, mac);
-    Serial.print("MAC override: ");
-    for (int i = 0; i < 6; ++i) {
-      if (i) Serial.print(":");
-      if (mac[i] < 0x10) Serial.print("0");
-      Serial.print(mac[i], HEX);
-    }
-    Serial.println();
-  }
-#endif
-
-#if defined(STATIC_IP) && defined(STATIC_GATEWAY) && defined(STATIC_SUBNET)
-  {
-    IPAddress ip, gw, sn, dns;
-    ip.fromString(STATIC_IP);
-    gw.fromString(STATIC_GATEWAY);
-    sn.fromString(STATIC_SUBNET);
-#ifdef STATIC_DNS
-    dns.fromString(STATIC_DNS);
-#else
-    dns = gw;
-#endif
-    WiFi.config(ip, gw, sn, dns);
-    Serial.print("Static IP: ");
-    Serial.println(ip);
-  }
-#endif
-
   WiFi.begin(configuredWifiSsid(), configuredWifiPassword());
 }
 
@@ -390,10 +359,6 @@ void TcpMatrixServer::ensureServerRunning() {
   }
 
   lastServerHealthCheckMs_ = nowMs;
-  if (server_.status() == CLOSED) {
-    Serial.println("TCP server closed unexpectedly, restarting");
-    restartServer();
-  }
 }
 
 void TcpMatrixServer::startServer() {

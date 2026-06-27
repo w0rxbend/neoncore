@@ -43,8 +43,8 @@ void setup() {
   delay(100);
 
   Serial.println();
-  Serial.println("ESP8266 WS2812B TCP matrix controller");
-  Serial.println("LED data pin: D2 / GPIO4");
+  Serial.println("ESP32 WS2812B TCP matrix controller");
+  Serial.println("LED data pin: GPIO4");
   Serial.print("Matrix: ");
   Serial.print(AppConfig::kMatrixWidth);
   Serial.print("x");
