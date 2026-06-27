@@ -20,6 +20,7 @@ CMD_SET_PIXEL = 0x04
 CMD_SET_STATIC_COLOR = 0x07
 CMD_SET_PRESET_EFFECT = 0x08
 CMD_STOP_EFFECT = 0x0A
+CMD_SET_AQI_STATUS = 0x0B
 
 STATUS_NAMES = {
     0x00: "OK",
@@ -119,6 +120,30 @@ def cmd_stop(args):
         send(s, build_frame(CMD_STOP_EFFECT))
 
 
+AQI_STATUS_NAMES = {
+    0x00: "excellent",
+    0x01: "good",
+    0x02: "good_degrading",
+    0x03: "moderate",
+    0x04: "moderate_degrading",
+    0x05: "poor",
+    0x06: "poor_degrading",
+    0x07: "unhealthy",
+    0x08: "unhealthy_degrading",
+    0x09: "very_unhealthy",
+    0x0A: "very_unhealthy_degrading",
+    0x0B: "hazardous",
+    0x0C: "extreme",
+}
+
+
+def cmd_aqi(args):
+    with connect(args.host, args.port) as s:
+        name = AQI_STATUS_NAMES.get(args.status, f"unknown({args.status})")
+        print(f"SET_AQI_STATUS {name}")
+        send(s, build_frame(CMD_SET_AQI_STATUS, bytes([args.status])))
+
+
 def parse_color(value: str):
     parts = value.split(",")
     if len(parts) != 3:
@@ -148,9 +173,16 @@ def main():
     p.add_argument("color", type=parse_color, help="r,g,b")
 
     p = sub.add_parser("effect")
-    p.add_argument("id", type=int, help=f"1-22  ({', '.join(f'{k}={v}' for k,v in EFFECT_NAMES.items())})")
-    p.add_argument("--interval", type=int, default=140, help="frame delay ms (default 140)")
-    p.add_argument("--color", type=parse_color, default=[255, 255, 255], help="r,g,b (default 255,255,255)")
+    effect_list = ", ".join(f"{k}={v}" for k, v in EFFECT_NAMES.items())
+    p.add_argument("id", type=int, help=f"1-22 ({effect_list})")
+    p.add_argument("--interval", type=int, default=140,
+                   help="frame delay ms (default 140)")
+    p.add_argument("--color", type=parse_color, default=[255, 255, 255],
+                   help="r,g,b (default 255,255,255)")
+
+    p = sub.add_parser("aqi")
+    aqi_list = ", ".join(f"{k}={v}" for k, v in AQI_STATUS_NAMES.items())
+    p.add_argument("status", type=int, help=f"AQI status code: {aqi_list}")
 
     args = parser.parse_args()
 
@@ -162,6 +194,7 @@ def main():
         "pixel": cmd_pixel,
         "effect": cmd_effect,
         "stop": cmd_stop,
+        "aqi": cmd_aqi,
     }
 
     try:

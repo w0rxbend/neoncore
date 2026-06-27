@@ -1,4 +1,6 @@
 #include <Arduino.h>
+#include <soc/rtc_cntl_reg.h>
+#include <soc/soc.h>
 
 #include "AppConfig.h"
 #include "LedMatrixController.h"
@@ -39,6 +41,8 @@ void runStartupAnimation() {
 }  // namespace
 
 void setup() {
+  WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
+
   Serial.begin(115200);
   delay(100);
 

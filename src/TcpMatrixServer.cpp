@@ -47,6 +47,11 @@ void scanNetworks() {
   WiFi.scanDelete();
 }
 
+// LED fill order for AQI level display: top-right corner first, spreading left
+// then down — mirrors the AirGradient ONE bar that grows left as AQ worsens.
+const uint8_t kAqiFillX[] = {3, 2, 1, 0, 3, 2, 1, 0, 3, 2, 1, 0, 3, 2, 1, 0};
+const uint8_t kAqiFillY[] = {0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3};
+
 uint8_t kColorWaveSteps[8] = {0, 2, 4, 6, 7, 5, 3, 1};
 uint8_t kBreathingSteps[16] = {10, 18, 28, 42, 60, 84, 112, 150,
                                190, 150, 112, 84, 60, 42, 28, 18};
@@ -83,6 +88,8 @@ const char* commandName(uint8_t command) {
       return "UPLOAD_CUSTOM_FRAME";
     case MatrixProtocol::Command::kStopEffect:
       return "STOP_EFFECT";
+    case MatrixProtocol::Command::kSetAqiStatus:
+      return "SET_AQI_STATUS";
     default:
       return "UNKNOWN";
   }
@@ -213,9 +220,12 @@ TcpMatrixServer::TcpMatrixServer(LedMatrixController& matrix)
       customFrameExpectedCount_(0),
       customReceivedMask_(0),
       customCurrentFrame_(0),
-      demoLoopActive_(true),
-      demoStepIndex_(0),
-      demoStepStartMs_(0) {
+      aqiStatusReceived_(false),
+      lastAqiDataMs_(0),
+      effectLedCount_(0),
+      effectColorRed2_(0),
+      effectColorGreen2_(0),
+      effectColorBlue2_(0) {
   memset(customFrameDelayMs_, 0, sizeof(customFrameDelayMs_));
   memset(customFrameBuffer_, 0, sizeof(customFrameBuffer_));
 }
@@ -223,6 +233,7 @@ TcpMatrixServer::TcpMatrixServer(LedMatrixController& matrix)
 void TcpMatrixServer::begin() {
   startWifi();
   ensureServerRunning();
+  startStandby();
 }
 
 void TcpMatrixServer::loop() {
@@ -231,7 +242,7 @@ void TcpMatrixServer::loop() {
   acceptClientIfNeeded();
   readClientBytes();
   const uint32_t nowMs = millis();
-  updateDemoLoop(nowMs);
+  updateStandby(nowMs);
   updateAnimations();
 }
 
@@ -241,6 +252,7 @@ void TcpMatrixServer::startWifi() {
     return;
   }
 
+  btStop();
   WiFi.persistent(false);
   WiFi.setAutoReconnect(true);
   WiFi.mode(WIFI_STA);
@@ -497,7 +509,6 @@ MatrixProtocol::Status TcpMatrixServer::applyCommand(uint8_t command, const uint
       if (length != 0) {
         return MatrixProtocol::Status::kInvalidLength;
       }
-      demoLoopActive_ = false;
       stopEffects();
       matrix_.clear();
       return MatrixProtocol::Status::kOk;
@@ -513,7 +524,6 @@ MatrixProtocol::Status TcpMatrixServer::applyCommand(uint8_t command, const uint
       if (length != 3) {
         return MatrixProtocol::Status::kInvalidLength;
       }
-      demoLoopActive_ = false;
       stopEffects();
       matrix_.fill(payload[0], payload[1], payload[2]);
       return MatrixProtocol::Status::kOk;
@@ -522,7 +532,6 @@ MatrixProtocol::Status TcpMatrixServer::applyCommand(uint8_t command, const uint
       if (length != 5) {
         return MatrixProtocol::Status::kInvalidLength;
       }
-      demoLoopActive_ = false;
       stopEffects();
       return matrix_.setPixel(payload[0], payload[1], payload[2], payload[3], payload[4])
                  ? MatrixProtocol::Status::kOk
@@ -533,7 +542,6 @@ MatrixProtocol::Status TcpMatrixServer::applyCommand(uint8_t command, const uint
       if (length != AppConfig::kLedCount * 3) {
         return MatrixProtocol::Status::kInvalidLength;
       }
-      demoLoopActive_ = false;
       stopEffects();
       return matrix_.setPhysicalFrame(payload, length) ? MatrixProtocol::Status::kOk
                                                       : MatrixProtocol::Status::kInvalidLength;
@@ -542,9 +550,17 @@ MatrixProtocol::Status TcpMatrixServer::applyCommand(uint8_t command, const uint
       if (length != 3) {
         return MatrixProtocol::Status::kInvalidLength;
       }
-      demoLoopActive_ = false;
       startEffect(EffectMode::kStatic, AppConfig::kDefaultPresetIntervalMs, payload[0], payload[1],
                   payload[2]);
+      return MatrixProtocol::Status::kOk;
+
+    case MatrixProtocol::Command::kSetAqiStatus:
+      if (length != 1) {
+        return MatrixProtocol::Status::kInvalidLength;
+      }
+      lastAqiDataMs_ = millis();
+      aqiStatusReceived_ = true;
+      applyAqiStatus(payload[0]);
       return MatrixProtocol::Status::kOk;
 
     case MatrixProtocol::Command::kSetPresetEffect: {
@@ -552,7 +568,6 @@ MatrixProtocol::Status TcpMatrixServer::applyCommand(uint8_t command, const uint
         return MatrixProtocol::Status::kInvalidLength;
       }
 
-      demoLoopActive_ = false;
       const uint8_t effectId = payload[0];
       if (effectId == 0) {
         stopEffects();
@@ -649,14 +664,14 @@ MatrixProtocol::Status TcpMatrixServer::applyCommand(uint8_t command, const uint
       const uint16_t frameDelay =
           static_cast<uint16_t>(payload[2] | (static_cast<uint16_t>(payload[3]) << 8));
 
-      demoLoopActive_ = false;
+
       return applyCustomFrame(frameIndex, frameCount, frameDelay, payload + 4)
                  ? MatrixProtocol::Status::kOk
                  : MatrixProtocol::Status::kInvalidLength;
     }
 
     case MatrixProtocol::Command::kStopEffect:
-      demoLoopActive_ = false;
+
       stopEffects();
       return MatrixProtocol::Status::kOk;
 
@@ -664,7 +679,7 @@ MatrixProtocol::Status TcpMatrixServer::applyCommand(uint8_t command, const uint
       if (length != 1) {
         return MatrixProtocol::Status::kInvalidLength;
       }
-      demoLoopActive_ = false;
+
       matrix_.setEnabled(payload[0] != 0);
       return MatrixProtocol::Status::kOk;
 
@@ -822,6 +837,27 @@ void TcpMatrixServer::renderEffectFrame(uint32_t nowMs) {
       break;
     case EffectMode::kConfetti:
       renderConfetti(nowMs);
+      break;
+    case EffectMode::kAqiLevel:
+      renderAqiLevel(nowMs);
+      break;
+    case EffectMode::kAqiBreathing:
+      renderAqiBreathing(nowMs);
+      break;
+    case EffectMode::kAqiBlink:
+      renderAqiBlink(nowMs);
+      break;
+    case EffectMode::kAqiInner:
+      renderAqiInner(nowMs);
+      break;
+    case EffectMode::kAqiPerimeter:
+      renderAqiPerimeter(nowMs);
+      break;
+    case EffectMode::kAqiDualZone:
+      renderAqiDualZone(nowMs);
+      break;
+    case EffectMode::kAqiAlternate:
+      renderAqiAlternate(nowMs);
       break;
     default:
       break;
@@ -1230,33 +1266,170 @@ void TcpMatrixServer::renderCustom(uint32_t nowMs) {
   customCurrentFrame_ = (customCurrentFrame_ + 1) % customFrameExpectedCount_;
 }
 
-void TcpMatrixServer::updateDemoLoop(uint32_t nowMs) {
-  if (!demoLoopActive_) {
-    return;
-  }
+void TcpMatrixServer::startStandby() {
+  startEffect(EffectMode::kBreathing, 80, 150, 180, 255);
+}
 
-  // Start the first step if nothing is playing yet.
-  if (effectMode_ == EffectMode::kDirect) {
-    startDemoStep(nowMs);
-    return;
-  }
+void TcpMatrixServer::startAqiEffect(EffectMode mode, uint16_t intervalMs,
+                                     uint8_t r, uint8_t g, uint8_t b,
+                                     uint8_t r2, uint8_t g2, uint8_t b2) {
+  effectColorRed2_   = r2;
+  effectColorGreen2_ = g2;
+  effectColorBlue2_  = b2;
+  startEffect(mode, intervalMs, r, g, b);
+}
 
-  // Advance to the next step when the current one has run long enough.
-  if (nowMs - demoStepStartMs_ >= AppConfig::kDemoStepDurationMs) {
-    demoStepIndex_ = (demoStepIndex_ + 1) % 2;
-    startDemoStep(nowMs);
+void TcpMatrixServer::applyAqiStatus(uint8_t status) {
+  switch (static_cast<MatrixProtocol::AqiStatus>(status)) {
+    // Green — Good
+    case MatrixProtocol::AqiStatus::kExcellent:
+      startAqiEffect(EffectMode::kAqiInner, 140, 0, 180, 0);
+      break;
+    case MatrixProtocol::AqiStatus::kGood:
+      startAqiEffect(EffectMode::kStatic, 140, 0, 180, 0);
+      break;
+    case MatrixProtocol::AqiStatus::kGoodDegrading:
+      startAqiEffect(EffectMode::kBreathing, 80, 0, 180, 0);
+      break;
+    // Yellow — Moderate
+    case MatrixProtocol::AqiStatus::kModerate:
+      startAqiEffect(EffectMode::kStatic, 140, 255, 210, 0);
+      break;
+    case MatrixProtocol::AqiStatus::kModerateDegrading:
+      startAqiEffect(EffectMode::kAqiDualZone, 80, 255, 210, 0, 255, 100, 0);
+      break;
+    // Orange — Poor / Unhealthy for Sensitive
+    case MatrixProtocol::AqiStatus::kPoor:
+      startAqiEffect(EffectMode::kStatic, 140, 255, 100, 0);
+      break;
+    case MatrixProtocol::AqiStatus::kPoorDegrading:
+      startAqiEffect(EffectMode::kBreathing, 80, 255, 100, 0);
+      break;
+    // Red — Unhealthy
+    case MatrixProtocol::AqiStatus::kUnhealthy:
+      startAqiEffect(EffectMode::kStatic, 140, 255, 0, 0);
+      break;
+    case MatrixProtocol::AqiStatus::kUnhealthyDegrading:
+      startAqiEffect(EffectMode::kBreathing, 80, 255, 0, 0);
+      break;
+    // Purple — Very Unhealthy
+    case MatrixProtocol::AqiStatus::kVeryUnhealthy:
+      startAqiEffect(EffectMode::kStatic, 140, 140, 0, 140);
+      break;
+    case MatrixProtocol::AqiStatus::kVeryUnhealthyDeg:
+      startAqiEffect(EffectMode::kBreathing, 80, 140, 0, 140);
+      break;
+    // Hazardous
+    case MatrixProtocol::AqiStatus::kHazardous:
+      startAqiEffect(EffectMode::kBlink, 500, 140, 0, 140);
+      break;
+    case MatrixProtocol::AqiStatus::kExtreme:
+      startAqiEffect(EffectMode::kAqiAlternate, 300, 140, 0, 140, 220, 0, 0);
+      break;
+    default:
+      startStandby();
+      break;
   }
 }
 
-void TcpMatrixServer::startDemoStep(uint32_t nowMs) {
-  demoStepStartMs_ = nowMs;
-  if (demoStepIndex_ == 0) {
-    // Step 0: green blink
-    startEffect(EffectMode::kBlink, AppConfig::kDemoBlinkIntervalMs, 0, 255, 0);
-  } else {
-    // Step 1: white solid
-    startEffect(EffectMode::kStatic, AppConfig::kDefaultPresetIntervalMs, 255, 255, 255);
+void TcpMatrixServer::renderAqiLevel(uint32_t /*nowMs*/) {
+  uint8_t frame[AppConfig::kLedCount * 3] = {};
+  for (uint8_t i = 0; i < effectLedCount_ && i < AppConfig::kLedCount; ++i) {
+    setFramePixel(frame, kAqiFillX[i], kAqiFillY[i],
+                  effectColorRed_, effectColorGreen_, effectColorBlue_);
   }
+  matrix_.setPhysicalFrame(frame, sizeof(frame));
+}
+
+void TcpMatrixServer::renderAqiBreathing(uint32_t /*nowMs*/) {
+  const uint8_t scale = kBreathingSteps[effectPhase_ % 16];
+  uint8_t frame[AppConfig::kLedCount * 3] = {};
+  for (uint8_t i = 0; i < effectLedCount_ && i < AppConfig::kLedCount; ++i) {
+    setFramePixel(frame, kAqiFillX[i], kAqiFillY[i],
+                  scaled(effectColorRed_, scale),
+                  scaled(effectColorGreen_, scale),
+                  scaled(effectColorBlue_, scale));
+  }
+  matrix_.setPhysicalFrame(frame, sizeof(frame));
+}
+
+void TcpMatrixServer::renderAqiBlink(uint32_t /*nowMs*/) {
+  effectBlinkState_ = !effectBlinkState_;
+  uint8_t frame[AppConfig::kLedCount * 3] = {};
+  if (effectBlinkState_) {
+    for (uint8_t i = 0; i < effectLedCount_ && i < AppConfig::kLedCount; ++i) {
+      setFramePixel(frame, kAqiFillX[i], kAqiFillY[i],
+                    effectColorRed_, effectColorGreen_, effectColorBlue_);
+    }
+  }
+  matrix_.setPhysicalFrame(frame, sizeof(frame));
+}
+
+void TcpMatrixServer::renderAqiInner(uint32_t /*nowMs*/) {
+  uint8_t frame[AppConfig::kLedCount * 3] = {};
+  for (uint8_t y = 1; y <= 2; ++y) {
+    for (uint8_t x = 1; x <= 2; ++x) {
+      setFramePixel(frame, x, y, effectColorRed_, effectColorGreen_, effectColorBlue_);
+    }
+  }
+  matrix_.setPhysicalFrame(frame, sizeof(frame));
+}
+
+void TcpMatrixServer::renderAqiPerimeter(uint32_t /*nowMs*/) {
+  uint8_t frame[AppConfig::kLedCount * 3] = {};
+  for (uint8_t x = 0; x < AppConfig::kMatrixWidth; ++x) {
+    setFramePixel(frame, x, 0, effectColorRed_, effectColorGreen_, effectColorBlue_);
+    setFramePixel(frame, x, AppConfig::kMatrixHeight - 1, effectColorRed_, effectColorGreen_, effectColorBlue_);
+  }
+  for (uint8_t y = 1; y < AppConfig::kMatrixHeight - 1; ++y) {
+    setFramePixel(frame, 0, y, effectColorRed_, effectColorGreen_, effectColorBlue_);
+    setFramePixel(frame, AppConfig::kMatrixWidth - 1, y, effectColorRed_, effectColorGreen_, effectColorBlue_);
+  }
+  matrix_.setPhysicalFrame(frame, sizeof(frame));
+}
+
+void TcpMatrixServer::renderAqiDualZone(uint32_t /*nowMs*/) {
+  const uint8_t scale = kBreathingSteps[effectPhase_ % 16];
+  uint8_t frame[AppConfig::kLedCount * 3] = {};
+  // Perimeter — primary colour, static.
+  for (uint8_t x = 0; x < AppConfig::kMatrixWidth; ++x) {
+    setFramePixel(frame, x, 0, effectColorRed_, effectColorGreen_, effectColorBlue_);
+    setFramePixel(frame, x, AppConfig::kMatrixHeight - 1, effectColorRed_, effectColorGreen_, effectColorBlue_);
+  }
+  for (uint8_t y = 1; y < AppConfig::kMatrixHeight - 1; ++y) {
+    setFramePixel(frame, 0, y, effectColorRed_, effectColorGreen_, effectColorBlue_);
+    setFramePixel(frame, AppConfig::kMatrixWidth - 1, y, effectColorRed_, effectColorGreen_, effectColorBlue_);
+  }
+  // Inner 2×2 — secondary colour, breathing.
+  for (uint8_t y = 1; y <= 2; ++y) {
+    for (uint8_t x = 1; x <= 2; ++x) {
+      setFramePixel(frame, x, y,
+                    scaled(effectColorRed2_, scale),
+                    scaled(effectColorGreen2_, scale),
+                    scaled(effectColorBlue2_, scale));
+    }
+  }
+  matrix_.setPhysicalFrame(frame, sizeof(frame));
+}
+
+void TcpMatrixServer::renderAqiAlternate(uint32_t /*nowMs*/) {
+  effectBlinkState_ = !effectBlinkState_;
+  const uint8_t r = effectBlinkState_ ? effectColorRed_  : effectColorRed2_;
+  const uint8_t g = effectBlinkState_ ? effectColorGreen_ : effectColorGreen2_;
+  const uint8_t b = effectBlinkState_ ? effectColorBlue_ : effectColorBlue2_;
+  matrix_.fill(r, g, b);
+}
+
+void TcpMatrixServer::updateStandby(uint32_t nowMs) {
+  if (!aqiStatusReceived_) {
+    return;
+  }
+  if (nowMs - lastAqiDataMs_ < AppConfig::kAqiStandbyTimeoutMs) {
+    return;
+  }
+  aqiStatusReceived_ = false;
+  Serial.println("AQI data timeout, returning to standby");
+  startStandby();
 }
 
 void TcpMatrixServer::sendStatus(MatrixProtocol::Status status) {

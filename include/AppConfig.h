@@ -58,8 +58,8 @@ constexpr uint8_t kMaxCustomFrames = 8;
 constexpr uint16_t kDefaultPresetIntervalMs = 140;
 constexpr uint16_t kMinEffectFrameDelayMs = 20;
 
-// Demo loop: sequence of steps played on boot until a TCP command overrides it.
-constexpr uint32_t kDemoStepDurationMs = 5000;
-constexpr uint16_t kDemoBlinkIntervalMs = 300;
+// Standby: if no kSetAqiStatus is received within this window the display
+// returns to the white-blue breathing animation.
+constexpr uint32_t kAqiStandbyTimeoutMs = 60000;
 
 }  // namespace AppConfig

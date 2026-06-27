@@ -55,6 +55,46 @@ enum class Command : uint8_t {
 
   // Stops any running effect and returns control to direct commands.
   kStopEffect = 0x0A,
+
+  // Sets the AirGradient air-quality status. Payload: 1 byte AqiStatus code.
+  // Resets the standby timeout. If no kSetAqiStatus is received within
+  // AppConfig::kAqiStandbyTimeoutMs the display returns to standby breathing.
+  kSetAqiStatus = 0x0B,
+};
+
+// Air-quality status codes for kSetAqiStatus.
+// Colors mirror the standard AirGradient ONE LED indicator scale.
+// 13 visually distinct air-quality statuses for a 4×4 LED matrix.
+// Each uses a unique combination of pattern, colour, and animation so it is
+// immediately identifiable at a glance.
+// The same code set covers both CO2 (ppm) and PM2.5 (µg/m³) — the sender
+// maps the sensor reading to the appropriate code before transmitting.
+enum class AqiStatus : uint8_t {
+  // Green — Good air quality
+  kExcellent          = 0x00,  // Inner 2×2 green static   — CO2 0–400    / PM2.5 0–2
+  kGood               = 0x01,  // Full green static         — CO2 400–600  / PM2.5 2–5
+  kGoodDegrading      = 0x02,  // Full green breathing      — CO2 600–800  / PM2.5 5–9
+
+  // Yellow — Moderate
+  kModerate           = 0x03,  // Full yellow static        — CO2 800–1000 / PM2.5 9–15
+  kModerateDegrading  = 0x04,  // Perimeter yellow + inner 2×2 orange breathing
+                               //                           — CO2 1000–1250/ PM2.5 15–25
+
+  // Orange — Unhealthy for Sensitive Groups
+  kPoor               = 0x05,  // Full orange static        — CO2 1250–1500/ PM2.5 25–35.4
+  kPoorDegrading      = 0x06,  // Full orange breathing     — CO2 1500–1750/ PM2.5 35.4–45
+
+  // Red — Unhealthy
+  kUnhealthy          = 0x07,  // Full red static           — CO2 1750–2000/ PM2.5 45–55.4
+  kUnhealthyDegrading = 0x08,  // Full red breathing        — CO2 2000–2500/ PM2.5 55.4–75
+
+  // Purple — Very Unhealthy
+  kVeryUnhealthy      = 0x09,  // Full purple static        — CO2 2500–3000/ PM2.5 75–125
+  kVeryUnhealthyDeg   = 0x0A,  // Full purple breathing     — CO2 3000–4000/ PM2.5 125–200
+
+  // Hazardous
+  kHazardous          = 0x0B,  // Full purple blink         — CO2 4000–5000/ PM2.5 200–300
+  kExtreme            = 0x0C,  // Full purple/red fast alternating blink — CO2 >5000 / PM2.5 >300
 };
 
 enum class Status : uint8_t {

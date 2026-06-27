@@ -48,7 +48,14 @@ class TcpMatrixServer {
     kHeartbeat,
     kPulseWipe,
     kConfetti,
-    kCustom
+    kCustom,
+    kAqiLevel,       // N LEDs lit from top-right, static
+    kAqiBreathing,   // N LEDs lit from top-right, breathing
+    kAqiBlink,       // N LEDs lit from top-right, blinking
+    kAqiInner,       // Inner 2×2 only, static
+    kAqiPerimeter,   // Outer 12 LEDs only, static
+    kAqiDualZone,    // Perimeter colour1 static + inner 2×2 colour2 breathing
+    kAqiAlternate,   // Full matrix alternating between colour1 and colour2
   };
 
   // Network startup and retry helpers.
@@ -79,6 +86,23 @@ class TcpMatrixServer {
 
   // Sends the compact 6-byte response frame back to the current TCP client.
   void sendStatus(MatrixProtocol::Status status);
+
+  // AQI status display.
+  void applyAqiStatus(uint8_t status);
+  void startAqiEffect(EffectMode mode, uint16_t intervalMs,
+                      uint8_t r, uint8_t g, uint8_t b,
+                      uint8_t r2 = 0, uint8_t g2 = 0, uint8_t b2 = 0);
+  void startStandby();
+  void updateStandby(uint32_t nowMs);
+
+  // AQI LED renderers.
+  void renderAqiLevel(uint32_t nowMs);
+  void renderAqiBreathing(uint32_t nowMs);
+  void renderAqiBlink(uint32_t nowMs);
+  void renderAqiInner(uint32_t nowMs);
+  void renderAqiPerimeter(uint32_t nowMs);
+  void renderAqiDualZone(uint32_t nowMs);
+  void renderAqiAlternate(uint32_t nowMs);
 
   // Animation engine.
   void updateAnimations();
@@ -112,9 +136,6 @@ class TcpMatrixServer {
   void renderConfetti(uint32_t nowMs);
   void renderCustom(uint32_t nowMs);
 
-  // Demo loop: auto-plays a preset sequence on boot until overridden by TCP.
-  void updateDemoLoop(uint32_t nowMs);
-  void startDemoStep(uint32_t nowMs);
 
   // Matrix is injected so network code does not own LED hardware directly.
   LedMatrixController& matrix_;
@@ -153,8 +174,12 @@ class TcpMatrixServer {
   uint8_t customCurrentFrame_;
   uint8_t customFrameBuffer_[AppConfig::kMaxCustomFrames][AppConfig::kLedCount * 3];
 
-  // Demo loop state.
-  bool demoLoopActive_;
-  uint8_t demoStepIndex_;
-  uint32_t demoStepStartMs_;
+  // Standby / AQI state.
+  bool aqiStatusReceived_;
+  uint32_t lastAqiDataMs_;
+  uint8_t effectLedCount_;
+  // Secondary colour for dual-zone and alternating effects.
+  uint8_t effectColorRed2_;
+  uint8_t effectColorGreen2_;
+  uint8_t effectColorBlue2_;
 };
