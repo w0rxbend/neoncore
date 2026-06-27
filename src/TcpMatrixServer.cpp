@@ -262,7 +262,6 @@ void TcpMatrixServer::startWifi() {
   Serial.println("\"");
 
   scanNetworks();
-
   beginStationConnect();
 
   Serial.print("Connecting to Wi-Fi");
@@ -273,9 +272,6 @@ void TcpMatrixServer::startWifi() {
     Serial.print(".");
   }
   Serial.println();
-
-  Serial.print("Final status: ");
-  Serial.println(wifiStatusName(WiFi.status()));
 
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println("Wi-Fi connection failed, will retry");
@@ -318,12 +314,8 @@ void TcpMatrixServer::beginStationConnect() {
     Serial.print("Static IP: ");
     Serial.println(ip);
   }
-#else
-  WiFi.config(IPAddress(), IPAddress(), IPAddress());
 #endif
 
-  WiFi.disconnect(true);
-  delay(100);
   WiFi.begin(configuredWifiSsid(), configuredWifiPassword());
 }
 
