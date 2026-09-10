@@ -51,6 +51,8 @@ void setup() {
 
   Serial.println();
   Serial.println("neoncore ESP32 WS2812B AQI indicator");
+  Serial.print("Firmware: ");
+  Serial.println(AppConfig::kFirmwareVersion);
   Serial.print("Protocol version: ");
   Serial.println(MatrixProtocol::kVersion);
   Serial.print("LED data pin: GPIO");

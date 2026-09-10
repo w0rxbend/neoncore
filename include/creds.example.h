@@ -8,6 +8,16 @@
 
 // --- Optional -------------------------------------------------------------
 
+// Discovery registration. Once Wi-Fi is up (DHCP by default) the device
+// POSTs {name, ip, port, mac, protocol, firmware, uptime_s} as JSON to this
+// URL, again on every reconnect, and every 5 minutes as a refresh. Senders
+// query the service to find the device. See tools/discovery_server.py for
+// a reference registry. Leave DISCOVERY_URL undefined to disable.
+// #define DISCOVERY_URL         "http://192.168.1.10:8787/register"
+// #define DISCOVERY_TOKEN       "optional-bearer-token"
+// #define DISCOVERY_DEVICE_NAME "living-room"   // default: neoncore-<mac tail>
+// #define DISCOVERY_HTTPS       1               // only for https:// URLs (+~125 KB flash)
+
 // Static IP instead of DHCP. All three required; DNS defaults to the gateway.
 // #define STATIC_IP      "192.168.1.42"
 // #define STATIC_GATEWAY "192.168.1.1"

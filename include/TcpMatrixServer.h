@@ -4,6 +4,7 @@
 #include <WiFi.h>
 
 #include "AqiDisplay.h"
+#include "DiscoveryClient.h"
 #include "LedMatrixController.h"
 #include "MatrixProtocol.h"
 
@@ -55,6 +56,7 @@ class TcpMatrixServer {
 
   LedMatrixController& matrix_;
   Aqi::Display display_;
+  DiscoveryClient discovery_;
 
   WiFiServer server_;
   WiFiClient client_;

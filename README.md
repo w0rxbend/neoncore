@@ -15,7 +15,7 @@
   <img alt="Build PlatformIO" src="https://img.shields.io/badge/build-PlatformIO-FFD200?style=flat-square&labelColor=0b0f14">
   <img alt="Protocol v2 on port 7777" src="https://img.shields.io/badge/protocol-v2%20%C2%B7%20TCP%207777-6EE7F9?style=flat-square&labelColor=0b0f14">
   <img alt="AQI states 13" src="https://img.shields.io/badge/AQI%20states-13-8C008C?style=flat-square&labelColor=0b0f14">
-  <img alt="Host tests 32 (Unity)" src="https://img.shields.io/badge/host%20tests-32%20(Unity)-00B400?style=flat-square&labelColor=0b0f14">
+  <img alt="Host tests 39 (Unity)" src="https://img.shields.io/badge/host%20tests-39%20(Unity)-00B400?style=flat-square&labelColor=0b0f14">
   <a href="LICENSE"><img alt="License MIT" src="https://img.shields.io/badge/license-MIT-FF6400?style=flat-square&labelColor=0b0f14"></a>
 </p>
 
@@ -29,6 +29,7 @@
   <a href="#-troubleshooting">Troubleshooting</a> ·
   <a href="#-protocol">Protocol</a> ·
   <a href="#-connection-rules">Connections</a> ·
+  <a href="#-discovery">Discovery</a> ·
   <a href="#-configuration">Configuration</a> ·
   <a href="#-architecture">Architecture</a> ·
   <a href="#-testing">Testing</a> ·
@@ -48,8 +49,8 @@ It is deliberately dumb in the right way. The device knows nothing about sensors
 | For | You get |
 |:--|:--|
 | **Users** | A BOM of five parts, one wire that matters, and a two-command flash. |
-| **Integrators** | A 6–7 byte request, a 6-byte reply, an XOR checksum, no dependencies. A sender is ~15 lines of Python. |
-| **Maintainers** | Hardware-free protocol and display cores, 32 host-side Unity tests, a `loop()` that never blocks. |
+| **Integrators** | A 6–7 byte request, a 6-byte reply, an XOR checksum, no dependencies. A sender is ~15 lines of Python. The device can register itself with your registry, so you never hard-code its IP. |
+| **Maintainers** | Hardware-free protocol, display and discovery-payload cores, 39 host-side Unity tests, a `loop()` that never blocks. |
 
 > The sender (the "scraper" that talks to the AirGradient) is **out of scope** for this repo — neoncore is the display. `tools/` contains two reference clients so you can drive it from a laptop today.
 
@@ -63,6 +64,8 @@ flowchart LR
     S -->|"TCP 7777 · 7-byte SET_AQI_STATUS frame"| N["neoncore<br/>ESP32 · protocol v2"]
     N -.->|"6-byte ACK"| S
     N -->|"GPIO4 · 48-byte RGB frame"| M["4x4 WS2812B matrix"]
+    N -.->|"HTTP POST on Wi-Fi up · every 5 min<br/>name, ip, port, mac"| R["Discovery registry (optional)<br/>tools/discovery_server.py or yours"]
+    S -.->|"GET /devices"| R
 ```
 
 **The contract in one breath:** connect to TCP port **7777**, send `4C 4D 02 <cmd> <len> <payload…> <xor>`, read **6 bytes** back, check that byte 4 is `0x00`. Everything else in this README is detail.
@@ -242,6 +245,7 @@ A healthy boot looks like this — the lines are exact strings from the firmware
 
 ```
 neoncore ESP32 WS2812B AQI indicator
+Firmware: 0.3.0
 Protocol version: 2
 LED data pin: GPIO4
 Matrix: 4x4
@@ -253,7 +257,10 @@ Connecting to Wi-Fi (non-blocking)
 Wi-Fi connected
 Device IP: 192.168.1.100
 TCP server started on 192.168.1.100:7777
+Discovery: disabled (DISCOVERY_URL not set)
 ```
+
+With a registry configured the last line becomes `Discovery: enabled, service http://…` followed shortly by `Discovery: registered neoncore-3ce903 at 192.168.1.100 (HTTP 200)`.
 
 What the panel does meanwhile: a 2 s settle delay → a short blocking startup sweep (a single white pixel crosses the 16 LEDs twice at 35 ms/step, a 180 ms green fill, an 80 ms clear — about 1.5 s) → the white-blue **standby breath**. Standby begins as soon as the sweep finishes, *before* Wi-Fi is up; the Wi-Fi connect itself is non-blocking and retries `WiFi.begin()` every 15 s (`Wi-Fi not connected, retrying`) until it succeeds. The display never waits for the network.
 
@@ -303,7 +310,7 @@ Sixty seconds later, with no further status, you will see `AQI data timeout, ret
 
 | Line | When |
 |:--|:--|
-| `neoncore ESP32 WS2812B AQI indicator` · `Protocol version: 2` · `LED data pin: GPIO4` · `Matrix: 4x4` · `Boot settle delay ms: 2000` | Banner, immediately after reset |
+| `neoncore ESP32 WS2812B AQI indicator` · `Firmware: 0.3.0` · `Protocol version: 2` · `LED data pin: GPIO4` · `Matrix: 4x4` · `Boot settle delay ms: 2000` | Banner, immediately after reset |
 | `Startup animation: running` | After the settle delay, before the sweep |
 | `MAC: XX:XX:XX:XX:XX:XX` | Wi-Fi start (uppercase hex, after `WIFI_MAC_OVERRIDE` if any) |
 | `MAC override failed, esp_err=<n>` | `esp_wifi_set_mac()` rejected the override |
@@ -322,6 +329,10 @@ Sixty seconds later, with no further status, you will see `AQI data timeout, ret
 | `TCP client connected from <ip>` | Accept |
 | `TCP client dropped: <reason>` | `replaced by new connection`, `peer closed`, `idle timeout`, `server stopping` |
 | `Partial frame timed out, parser reset` | Half a frame, then 2 s of silence |
+| `Discovery: enabled, service <url>` / `Discovery: disabled (DISCOVERY_URL not set)` | Once at startup, station mode only |
+| `Discovery: registered <name> at <ip> (HTTP <code>)` | Each successful registration: link up, then every 5 min |
+| `Discovery: registration failed (<reason>), retry in 30 s` | Connection refused, timeout, non-2xx, etc. |
+| `Discovery: DISCOVERY_URL is https but DISCOVERY_HTTPS is not defined` · `Discovery: invalid DISCOVERY_URL` · `Discovery: payload does not fit, check DISCOVERY_DEVICE_NAME length` · `Discovery: failed to start worker task, registration disabled` | Configuration problems |
 | `Instruction: <NAME> (0x<hex>), len=<n>, from <ip>:<port> -> <STATUS>` | Every command (`PING`, `SET_BRIGHTNESS`, `SET_PANEL_ENABLED`, `SET_AQI_STATUS`, `UNKNOWN`). The hex id is unpadded: `(0x0)`, `(0x1)`, `(0x3)`. |
 | `AQI data timeout, returning to standby` | 60 s without a status |
 </details>
@@ -349,6 +360,11 @@ Sixteen pixels can only fail in so many ways. The serial monitor (`pio device mo
 | Persistent sender gets `connection closed before response` or a reset | Another client connected (newest wins), 90 s passed without a complete frame, or Wi-Fi dropped (`server stopping`). Reconnect and resend. |
 | Panel goes back to white-blue after a minute | Expected: 60 s without `SET_AQI_STATUS`. `PING` does **not** count. Resend the status (same code = heartbeat). |
 | Standby breathing but nothing responds on 7777 | Standby says nothing about the network — it starts before Wi-Fi is up and keeps running if Wi-Fi never connects. Only the serial log shows link state. |
+| `Discovery: registration failed (connection refused)` every 30 s | Registry not running, wrong host/port in `DISCOVERY_URL`, or a firewall. Start `tools/discovery_server.py` and `curl -X POST` it from a laptop first. |
+| `Discovery: registration failed (HTTP 401)` | Registry wants a bearer token: set `DISCOVERY_TOKEN` to match (`--token` on the reference server). |
+| `Discovery: registration failed (HTTP 404)` | `DISCOVERY_URL` must include the path — `/register` on the reference server — not just the host. |
+| Device registers but the sender still can't connect | The registered `ip` is what the ESP32 sees on its own interface. If the registry and the sender are on a different VLAN or behind NAT, they need a route to it. Check `GET /devices` shows the IP you expect. |
+| `Discovery: DISCOVERY_URL is https but DISCOVERY_HTTPS is not defined` | TLS is opt-in to save ~125 KB of flash. Add `#define DISCOVERY_HTTPS 1` to `creds.h`, or use a plain `http://` registry on the LAN. |
 
 ---
 
@@ -476,6 +492,68 @@ Both styles work: **connect-per-update** (open, send, read 6 bytes, close — wh
 
 ---
 
+## 📍 Discovery
+
+DHCP addresses move. Rather than pinning a static IP on every device, let neoncore announce itself: set `DISCOVERY_URL` in `creds.h` and, every time Wi-Fi comes up, the device POSTs one small JSON document to your registry. Your sender asks the registry where the device is and connects.
+
+```mermaid
+sequenceDiagram
+    participant N as neoncore
+    participant R as Registry (DISCOVERY_URL)
+    participant S as Sender
+    Note over N: Wi-Fi up, DHCP lease obtained
+    N->>R: POST /register {"name","ip","port","mac","protocol","firmware","uptime_s"}
+    R-->>N: 200 OK
+    loop every 5 min (refresh) · every 30 s after a failure (retry) · again on every reconnect
+        N->>R: POST /register (same body, new uptime)
+        R-->>N: 200 OK
+    end
+    S->>R: GET /devices
+    R-->>S: [{"name":"living-room","ip":"192.168.1.42","port":7777,…}]
+    S->>N: TCP 7777 · SET_AQI_STATUS
+```
+
+**What is sent** — one line of JSON, `Content-Type: application/json`, plus `Authorization: Bearer …` when `DISCOVERY_TOKEN` is set:
+
+```json
+{"name":"living-room","ip":"192.168.1.42","port":7777,"mac":"CC:50:E3:3C:E9:03","protocol":2,"firmware":"0.3.0","uptime_s":4242}
+```
+
+| Field | Meaning |
+|:--|:--|
+| `name` | `DISCOVERY_DEVICE_NAME`, or `neoncore-` + the last three MAC bytes in lowercase hex (`neoncore-3ce903`). The registry's key. |
+| `ip` · `port` | Where to open the TCP contract. `ip` is the address DHCP handed out; `port` is `kTcpPort` (7777). |
+| `mac` | Stable across reboots and DHCP renewals; useful as a secondary key. |
+| `protocol` | Wire protocol version (2). A sender can refuse devices it doesn't speak. |
+| `firmware` | `kFirmwareVersion`. |
+| `uptime_s` | Seconds since boot, so a registry can spot reboots. |
+
+**When it is sent** — immediately on link up (after DHCP), then every 5 minutes as a keep-alive so the registry can expire devices that vanished, and every 30 seconds after a failure. A Wi-Fi drop clears the registered state and the next link-up registers again, which is what makes a changed DHCP address harmless. Any 2xx reply is success; anything else, including a timeout, is logged and retried.
+
+**It never blocks the display.** The HTTP call runs on its own FreeRTOS task. The main loop only decides *when* to register and pokes the task; a slow or dead registry costs nothing but a log line every 30 s.
+
+**Reference registry** — `tools/discovery_server.py` is a standard-library Python service that does exactly what the diagram shows, with an optional bearer token and a 15-minute TTL:
+
+```bash
+python3 tools/discovery_server.py --port 8787              # add --token SECRET to require DISCOVERY_TOKEN
+curl -s http://localhost:8787/devices                       # every live device
+curl -s http://localhost:8787/devices/living-room           # one by name
+```
+
+Then in `creds.h`:
+
+```cpp
+#define DISCOVERY_URL         "http://192.168.1.10:8787/register"
+#define DISCOVERY_DEVICE_NAME "living-room"      // optional
+#define DISCOVERY_TOKEN       "SECRET"           // optional
+```
+
+Any HTTP endpoint that accepts a JSON POST works just as well — a Home Assistant webhook, a tiny Flask route, an n8n flow. HTTPS is supported but opt-in (`#define DISCOVERY_HTTPS 1`) because the TLS stack costs a further ~125 KB of flash on top of the ~175 KB the HTTP client already adds; certificate validation is disabled, so treat it as obfuscation on a LAN, not security.
+
+> Discovery is a convenience for *finding* the device. It is not part of the TCP contract: a device with `DISCOVERY_URL` unset behaves identically on port 7777, and nothing about it is compiled in.
+
+---
+
 ## ⚙ Configuration
 
 All options are `#define`s in `include/creds.h` (copied from `include/creds.example.h`, git-ignored, pulled in through `#if __has_include("creds.h")`). Unset options take the defaults from `AppConfig.h`. Only `WIFI_SSID` and `WIFI_PASSWORD` are needed for a normal install — and if even those are left empty, the device starts an access point instead. Note that a missing `creds.h` is **not a build error** — `AppConfig.h` includes it only `#if __has_include("creds.h")`, so without the file the firmware silently builds with an empty SSID and boots as the open access point `led-matrix`. If the serial banner says `AP SSID (open): led-matrix` when you expected station mode, that is why.
@@ -490,6 +568,10 @@ All options are `#define`s in `include/creds.h` (copied from `include/creds.exam
 | `WIFI_AP_PASSWORD` | `""` | AP mode only. ≥ 8 chars → WPA2. 1–7 chars → warning and an **open** AP. Empty → open AP. |
 | `WIFI_SCAN_ON_BOOT` | `0` | `1` lists SSID / RSSI / channel / encryption on serial at boot. Adds a few seconds. |
 | `LED_PIN` | `4` | WS2812B data pin (GPIO4). |
+| `DISCOVERY_URL` | unset | Registry endpoint to POST the device's address to on every Wi-Fi link-up and every 5 min. Unset → nothing compiled in. See [Discovery](#-discovery). |
+| `DISCOVERY_TOKEN` | `""` | Sent as `Authorization: Bearer …` with each registration. |
+| `DISCOVERY_DEVICE_NAME` | `""` | Registry key. Empty → `neoncore-<last 3 MAC bytes>`. Max ~40 chars; longer names are rejected at boot with a log line. |
+| `DISCOVERY_HTTPS` | unset | Define to `1` to link TLS for an `https://` registry (+~125 KB flash, no certificate validation). |
 
 <details>
 <summary><b>Access-point mode, and what "AP fallback" does and doesn't mean</b></summary>
@@ -505,7 +587,7 @@ All options are `#define`s in `include/creds.h` (copied from `include/creds.exam
 
 ## 🏗 Architecture
 
-For maintainers. The codebase is split along one hard line: **everything with logic worth testing compiles on the host without Arduino**, and everything that touches hardware is a thin adapter. The two hardware-free modules — the wire protocol and the visual contract — carry all 32 tests and almost all of the logic.
+For maintainers. The codebase is split along one hard line: **everything with logic worth testing compiles on the host without Arduino**, and everything that touches hardware is a thin adapter. The three hardware-free modules — the wire protocol, the visual contract and the discovery payload — carry all 39 tests and almost all of the logic.
 
 ```mermaid
 flowchart TB
@@ -513,11 +595,13 @@ flowchart TB
         main["src/main.cpp<br/>setup(): brown-out off, banner, settle, LED begin, sweep, tcpServer.begin()<br/>loop(): tcpServer.loop()"]
         tcp["TcpMatrixServer<br/>Wi-Fi STA/AP · WiFiServer · client · dispatch · logging"]
         led["LedMatrixController<br/>Adafruit_NeoPixel wrapper · frameRgb_ · enabled_"]
+        disc["DiscoveryClient<br/>FreeRTOS task · HTTPClient POST · retry/refresh timers"]
     end
     subgraph pure["Hardware-free · also built by pio test -e native"]
         proto["MatrixProtocol<br/>constants · Command / AqiStatus / Status enums<br/>checksum() · buildResponse() · FrameParser"]
         aqi["AqiDisplay<br/>kVisuals · lookupVisual() · standbyVisual()<br/>Aqi::Display: (status, time) → 48-byte frame"]
         layout["MatrixLayout (header-only)<br/>logicalToPhysical(x,y) · setFramePixel()"]
+        dpay["DiscoveryPayload<br/>buildPayload(): registration JSON"]
     end
     cfg["AppConfig.h<br/>every constexpr knob · pulls in creds.h"]
     main --> tcp
@@ -525,6 +609,8 @@ flowchart TB
     tcp --> proto
     tcp --> aqi
     tcp -->|"holds reference"| led
+    tcp -->|"link up/down, loop()"| disc
+    disc --> dpay
     aqi --> layout
     led --> layout
     cfg -.-> main
@@ -541,6 +627,8 @@ flowchart TB
 | **MatrixProtocol** | `include/MatrixProtocol.h` · `src/MatrixProtocol.cpp` | The wire contract: constants, `Command` / `AqiStatus` / `Status` enums, `checksum()`, `buildResponse()`, and the byte-at-a-time `FrameParser` (`push()` → `kNeedMore` / `kFrameReady` / `kError`). | ✓ |
 | **AqiDisplay** | `include/AqiDisplay.h` · `src/AqiDisplay.cpp` | The visual contract: `kVisuals` table, `lookupVisual()`, `standbyVisual()`, and `Aqi::Display`, which turns (status, time) into a 48-byte physical-order RGB frame including transitions, breathing, blink, alternate, dual-zone and the standby timeout. | ✓ |
 | **MatrixLayout** | `include/MatrixLayout.h` | Header-only serpentine mapping: `logicalToPhysical(x, y)` and `setFramePixel()`. Shared by the renderer and the LED driver so they can never disagree. | ✓ |
+| **DiscoveryPayload** | `include/DiscoveryPayload.h` · `src/DiscoveryPayload.cpp` | `buildPayload()`: the registration JSON (`name`, `ip`, `port`, `mac`, `protocol`, `firmware`, `uptime_s`) with proper string escaping and a hard capacity check. Pinned byte-for-byte by tests. | ✓ |
+| **DiscoveryClient** | `include/DiscoveryClient.h` · `src/DiscoveryClient.cpp` | Registers with `DISCOVERY_URL`. The main loop schedules (link-up, 5 min refresh, 30 s retry) and notifies a FreeRTOS task; the task snapshots IP/MAC, builds the payload, and does the blocking `HTTPClient` POST. Compiled to a no-op without `DISCOVERY_URL`. | ✗ |
 | **LedMatrixController** | `include/LedMatrixController.h` · `src/LedMatrixController.cpp` | Thin Adafruit_NeoPixel wrapper (`NEO_GRB + NEO_KHZ800`): `begin` / `clear` / `setBrightness` / `setEnabled` / `fill` / `setPixel` / `setPhysicalFrame`. Keeps its own `frameRgb_` so `setBrightness` re-renders from the stored colours and NeoPixel's lossy brightness scaling never accumulates. Disabled → writes black, keeps the frame. | ✗ |
 | **TcpMatrixServer** | `include/TcpMatrixServer.h` · `src/TcpMatrixServer.cpp` | Owns Wi-Fi (STA or AP), `WiFiServer` / `WiFiClient`, one `FrameParser`, one `Aqi::Display`, and a reference to the `LedMatrixController`; command dispatch, responses, all serial logging. Nothing in `loop()` blocks. | ✗ |
 | **main** | `src/main.cpp` | Arduino `setup()`: brown-out off, serial banner, settle delay, LED begin, blocking startup sweep, `tcpServer.begin()`. `loop()` is a single `tcpServer.loop()`. | ✗ |
@@ -551,15 +639,17 @@ flowchart TB
 
 ```
 nowMs = millis()
-updateWifi()              // retry WiFi.begin() every 15 s; stop server on link loss   (own millis())
+updateWifi()              // retry WiFi.begin() every 15 s; stop server on link loss;  (own millis())
+                          // link up/down → discovery_.onNetworkUp()/onNetworkDown()
 ensureServerRunning()     // start WiFiServer on :7777 once the link is up
+discovery_.loop(nowMs)    // decide whether to (re)register; notifies the worker task, never blocks
 acceptClientIfPending()   // newest client wins; drop the old one first                (own millis())
 readClientBytes()         // ≤ 256 bytes, one at a time into FrameParser::push(); dispatch + respond (own millis())
 expireStalledFrame(nowMs) // 2 s partial-frame timeout
 updateDisplay(nowMs)      // display_.render(); push to LEDs only if the frame changed; log standby entry
 ```
 
-`begin()` is `display_.begin(millis())` → `startWifi()` → `ensureServerRunning()` — standby is showing before the radio is up.
+`begin()` is `display_.begin(millis())` → `startWifi()` → `ensureServerRunning()` → `discovery_.begin()` (station mode only) — standby is showing before the radio is up.
 
 ```mermaid
 sequenceDiagram
@@ -645,7 +735,7 @@ The protocol and display cores are compiled for your host with [Unity](https://g
 The `native` env uses whatever `g++` / `clang++` is on your `PATH` (any C++17 compiler; PlatformIO does not download one for `platform = native`). On Debian/Ubuntu that is `sudo apt install build-essential`, on macOS the Xcode command-line tools, on Windows MinGW-w64 or MSVC in a developer shell.
 
 ```bash
-pio test -e native     # 2 suites, 32 tests, seconds
+pio test -e native     # 3 suites, 39 tests, seconds
 pio check              # cppcheck (warning, style, performance, portability) on esp32dev
 ```
 
@@ -663,13 +753,21 @@ XOR checksum · response frame well-formed (6 bytes, `0x80`) · parse `PING` · 
 Serpentine layout mapping (`(0,1)→7`, `(3,1)→4`, `(0,3)→15`, out-of-range → 16) · exactly 13 statuses (13, `0x7F`, `0xFF` rejected) · patterns match the spec · colour bands (green 0–2, yellow 3–4, `0x04` inner = orange of `0x05`, orange 5–6, red 7–8, purple 9–`0x0C`, extreme's secondary is a distinct red) · every status visually unique · boots into standby breathing (blue-dominant) · invalid status rejected and ignored · `render()` reports unchanged frames · status change starts the wipe from top-right over the previous frame (8 px painted after 7 steps) · transition holds solid then settles (inner 2×2 for `0x00`) · same status = heartbeat, no transition · change mid-transition restarts from the current frame · static pattern constant · breathing cycles, never dark, period 16 steps, max below static · blink toggles at 500 ms · alternate swaps colours at 300 ms · dual-zone static perimeter + breathing centre · stale data → standby with transition at exactly 60 s from the last status · heartbeat refreshes the standby timeout · first status after standby transitions again.
 </details>
 
+<details>
+<summary><b><code>test/test_discovery</code> — 7 tests</b></summary>
+<br>
+
+Payload matches the documented JSON byte-for-byte · default-style `neoncore-xxxxxx` name fits · quotes, backslashes and control characters in strings are escaped · null strings become `""` · too-small buffer, zero capacity and null output are rejected with `-1` · exact-fit boundary (capacity `n` fails, `n + 1` succeeds) · numeric fields use their full range (`port` 65535, `uptime_s` 2³²−1, `protocol` 255).
+</details>
+
 ### Test strategy for changes
 
 | You are changing… | Write the test in… | Pattern |
 |:--|:--|:--|
 | Frame format, a new command id, parser recovery | `test_protocol` | Feed bytes one at a time through `FrameParser::push()`, assert `kNeedMore` / `kFrameReady` / `kError` and the resulting `Status`. |
 | A colour, pattern, timing constant | `test_aqi` | Construct `Aqi::Display`, call `begin(0)`, `setStatus(code, t)`, then `render(t, frame)` at chosen instants; assert on the 48-byte frame via `MatrixLayout::logicalToPhysical`. |
-| Wi-Fi, sockets, NeoPixel | — | Not host-testable today; verify on hardware with the serial log lines listed under [Quick start](#-quick-start). Keep such changes small and behind the existing method boundaries in `TcpMatrixServer`. |
+| A field in the registration JSON | `test_discovery` | Build an `Info`, call `buildPayload()`, assert the exact string. Update the documented body in this README and `docs/protocol.md` in the same commit. |
+| Wi-Fi, sockets, NeoPixel, the discovery HTTP task | — | Not host-testable today; verify on hardware with the serial log lines listed under [Quick start](#-quick-start). Keep such changes small and behind the existing method boundaries in `TcpMatrixServer`. |
 
 Timing tests use the constants from `AppConfig.h` rather than literals where possible, so retuning a knob does not silently break a test — but if you change a *shape* (table length, wipe order) the tests will and should fail.
 
@@ -678,9 +776,9 @@ Timing tests use the constants from `AppConfig.h` rather than literals where pos
 | Env | Platform | Notes |
 |:--|:--|:--|
 | `esp32dev` (default) | `espressif32` · Arduino · `monitor_speed = 115200` | `lib_deps = adafruit/Adafruit NeoPixel@^1.15.5` · `check_tool = cppcheck` |
-| `native` | host · Unity | `build_src_filter = +<MatrixProtocol.cpp> +<AqiDisplay.cpp>` · `-std=c++17 -Wall -Wextra` · needs a host C++17 compiler on `PATH` |
+| `native` | host · Unity | `build_src_filter = +<MatrixProtocol.cpp> +<AqiDisplay.cpp> +<DiscoveryPayload.cpp>` · `-std=c++17 -Wall -Wextra` · needs a host C++17 compiler on `PATH` |
 
-The `native` env compiles only those two sources. **If you add a hardware-free source file, add it to that filter.**
+The `native` env compiles only those three sources. **If you add a hardware-free source file, add it to that filter.**
 
 ---
 
@@ -698,20 +796,26 @@ neoncore/
 │   ├── MatrixProtocol.h        # wire contract: enums, constants, FrameParser   [hardware-free]
 │   ├── AqiDisplay.h            # visual contract: Aqi::Display                 [hardware-free]
 │   ├── MatrixLayout.h          # serpentine mapping (header-only)              [hardware-free]
+│   ├── DiscoveryPayload.h      # registration JSON builder                     [hardware-free]
+│   ├── DiscoveryClient.h       # registry registration (FreeRTOS task + HTTP)
 │   ├── LedMatrixController.h   # NeoPixel wrapper
 │   └── TcpMatrixServer.h       # Wi-Fi + TCP + dispatch
 ├── src/
 │   ├── main.cpp                # setup()/loop(), startup sweep
 │   ├── MatrixProtocol.cpp
 │   ├── AqiDisplay.cpp          # kVisuals table, breathing table, wipe order, renderer
+│   ├── DiscoveryPayload.cpp
+│   ├── DiscoveryClient.cpp     # no-op unless DISCOVERY_URL is defined
 │   ├── LedMatrixController.cpp
 │   └── TcpMatrixServer.cpp
 ├── test/
 │   ├── test_protocol/test_main.cpp   # 12 Unity tests
-│   └── test_aqi/test_main.cpp        # 20 Unity tests
+│   ├── test_aqi/test_main.cpp        # 20 Unity tests
+│   └── test_discovery/test_main.cpp  #  7 Unity tests
 ├── tools/
 │   ├── client.py               # one-shot CLI: ping / brightness / panel / aqi, exit codes 0/1/2
-│   └── aqi_example.py          # persistent-connection tour of all 13 states
+│   ├── aqi_example.py          # persistent-connection tour of all 13 states
+│   └── discovery_server.py     # reference registry: POST /register, GET /devices
 ├── docs/
 │   ├── protocol.md             # normative protocol spec
 │   └── assets/                 # hero, states, transition, wiring, frame (SVG)
@@ -735,6 +839,8 @@ Everything below is a `constexpr` in `include/AppConfig.h`. Change the number, r
 | `kWifiRetryIntervalMs` | `15000` | Flaky AP. |
 | `kTcpKeepAliveIdleSec` / `IntervalSec` / `Count` | `10` / `5` / `3` | Faster dead-peer detection (≈ idle + interval × count) at the cost of chatter. |
 | `kFrameTimeoutMs` | `2000` | Very slow or very bursty senders. |
+| `kDiscoveryRefreshIntervalMs` · `kDiscoveryRetryIntervalMs` | `300000` · `30000` | How often a registered device re-announces, and how fast it retries a dead registry. Keep refresh below the registry's TTL (15 min on the reference server). |
+| `kDiscoveryHttpTimeoutMs` | `5000` | Connect/read timeout for the registration POST. Only the worker task waits on it. |
 | `kMaxClientBytesPerLoop` | `256` | Bulk-command senders (rarely needed — contract frames are 6–7 bytes). |
 | `kBootSettleDelayMs` | `2000` | Shorter boot if your supply is solid. |
 | `kDisableBrownoutDetector` | `true` | Set `false` on a good supply to get resets instead of corruption. |
@@ -767,6 +873,7 @@ Short version: **it's a lamp on your LAN.** Protocol v2 has **no authentication 
 - Anyone who can reach port 7777 can set the display, change brightness or blank it. They cannot do anything else — there is no command that writes flash, reboots, or reads configuration. None of the writable state persists.
 - Keep neoncore on a trusted LAN or IoT VLAN. **Do not port-forward 7777.** If you want remote control, put the sender on the LAN and reach *it* securely.
 - Wi-Fi credentials live in the git-ignored `include/creds.h` and in the compiled binary; `WiFi.persistent(false)` keeps them out of the ESP32's Wi-Fi flash storage.
+- Discovery, when enabled, tells the registry the device's LAN IP and MAC over plain HTTP by default. `DISCOVERY_TOKEN` stops random hosts from registering fake devices with your registry; it does not hide the payload from anyone sniffing the LAN. HTTPS is available but skips certificate validation.
 - Open-AP mode (`WIFI_SSID` empty, no `WIFI_AP_PASSWORD`) is for the bench, not the shelf.
 - The 256-byte per-loop read budget exists to keep animations smooth, not to throttle attackers.
 
@@ -783,7 +890,7 @@ Short version: **it's a lamp on your LAN.** Protocol v2 has **no authentication 
 - [AirGradient](https://www.airgradient.com/) — the ONE monitor this display was built to accompany, and whose LED bar inspired the wipe direction.
 - [Adafruit NeoPixel](https://github.com/adafruit/Adafruit_NeoPixel) — the WS2812B driver underneath `LedMatrixController`.
 - [PlatformIO](https://platformio.org/) — build, upload, monitor, host tests and cppcheck in one tool.
-- [Unity](https://github.com/ThrowTheSwitch/Unity) — the test framework behind the 32 tests.
+- [Unity](https://github.com/ThrowTheSwitch/Unity) — the test framework behind the 39 tests.
 
 <p align="center">
   <sub>Built by <a href="https://github.com/w0rxbend">w0rxbend</a>. neoncore · ESP32 · 4×4 WS2812B · protocol v2 · port 7777. Sixteen pixels, one byte, no excuses.</sub>

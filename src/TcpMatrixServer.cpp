@@ -109,6 +109,7 @@ void logInstruction(uint8_t command, uint8_t payloadLength, const IPAddress& rem
 TcpMatrixServer::TcpMatrixServer(LedMatrixController& matrix)
     : matrix_(matrix),
       display_(),
+      discovery_(),
       server_(AppConfig::kTcpPort),
       client_(),
       parser_(),
@@ -122,12 +123,16 @@ void TcpMatrixServer::begin() {
   display_.begin(millis());
   startWifi();
   ensureServerRunning();
+  if (hasStationCredentials()) {
+    discovery_.begin();
+  }
 }
 
 void TcpMatrixServer::loop() {
   const uint32_t nowMs = millis();
   updateWifi();
   ensureServerRunning();
+  discovery_.loop(nowMs);
   acceptClientIfPending();
   readClientBytes();
   expireStalledFrame(nowMs);
@@ -242,6 +247,7 @@ void TcpMatrixServer::updateWifi() {
       stationConnected_ = true;
       Serial.println("Wi-Fi connected");
       printNetworkAddress();
+      discovery_.onNetworkUp();
     }
     return;
   }
@@ -249,6 +255,7 @@ void TcpMatrixServer::updateWifi() {
   if (stationConnected_) {
     stationConnected_ = false;
     Serial.println("Wi-Fi disconnected");
+    discovery_.onNetworkDown();
   }
 
   stopServer();

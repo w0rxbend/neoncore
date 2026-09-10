@@ -167,6 +167,31 @@ a code; this is the mapping the codes were designed for:
 
 ---
 
+## Finding the device
+
+The TCP contract above assumes the sender knows the device's address. With
+`DISCOVERY_URL` set in `creds.h`, the device announces itself instead: every
+time Wi-Fi comes up it POSTs this JSON to the URL, and refreshes it every
+5 minutes (retrying every 30 s after a failure):
+
+```json
+{"name":"living-room","ip":"192.168.1.42","port":7777,
+ "mac":"CC:50:E3:3C:E9:03","protocol":2,"firmware":"0.3.0","uptime_s":4242}
+```
+
+Headers: `Content-Type: application/json`, `User-Agent: neoncore/<firmware>`,
+and `Authorization: Bearer <DISCOVERY_TOKEN>` when a token is configured. Any
+2xx response counts as success. `name` defaults to `neoncore-` followed by
+the last three MAC bytes in lowercase hex. Senders then look the device up by
+name and connect to `ip:port`. `tools/discovery_server.py` is a reference
+registry that accepts these registrations and serves `GET /devices`.
+
+This is a convenience for locating the device; it is not part of the TCP
+protocol and a device with discovery disabled behaves identically on port
+7777.
+
+---
+
 ## Security model
 
 There is no authentication or encryption. Anyone who can reach port 7777
