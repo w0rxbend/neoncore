@@ -1,0 +1,176 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1200" height="420" viewBox="0 0 1200 420" role="img" aria-label="neoncore — ambient air-quality indicator, ESP32 + WS2812B">
+  <title>neoncore</title>
+  <defs>
+    <style>
+      .t { font-family: Inter, 'Segoe UI', system-ui, -apple-system, sans-serif; }
+      .wm { font-weight: 800; font-size: 92px; letter-spacing: -3px; }
+      .tag { font-weight: 500; font-size: 21px; fill: #9aa7b8; }
+      .pill { font-weight: 600; font-size: 14px; fill: #c9d3e0; letter-spacing: 0.3px; }
+      .cap { font-weight: 600; font-size: 12px; fill: #5c6878; letter-spacing: 2.5px; }
+      .inner { animation: breathe 1.3s ease-in-out infinite; }
+      @keyframes breathe { 0% { opacity: 0.55; } 50% { opacity: 1; } 100% { opacity: 0.55; } }
+    </style>
+
+    <!-- soft glow -->
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="9" result="b"/>
+      <feMerge>
+        <feMergeNode in="b"/>
+        <feMergeNode in="b"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="softglow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="14"/>
+    </filter>
+
+    <!-- background grid -->
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0H0V40" fill="none" stroke="#ffffff" stroke-opacity="0.045" stroke-width="1"/>
+    </pattern>
+
+    <!-- vignette -->
+    <radialGradient id="vig" cx="0.32" cy="0.5" r="0.75">
+      <stop offset="0" stop-color="#0b0f14" stop-opacity="0"/>
+      <stop offset="1" stop-color="#05070a" stop-opacity="0.85"/>
+    </radialGradient>
+    <radialGradient id="halo" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#ffb000" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#ffb000" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="haloblue" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#6ee7f9" stop-opacity="0.10"/>
+      <stop offset="1" stop-color="#6ee7f9" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- wordmark gradient -->
+    <linearGradient id="wmg" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="0.55" stop-color="#e6f0ff"/>
+      <stop offset="1" stop-color="#96b4ff"/>
+    </linearGradient>
+    <linearGradient id="panel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#121821"/>
+      <stop offset="1" stop-color="#0c1017"/>
+    </linearGradient>
+    <linearGradient id="rule" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#6ee7f9" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#6ee7f9" stop-opacity="0"/>
+    </linearGradient>
+
+    <!-- one LED cell, reused -->
+    <rect id="cell" width="56" height="56" rx="13" ry="13"/>
+    <!-- specular highlight on a cell -->
+    <rect id="spec" x="8" y="7" width="26" height="9" rx="4.5" fill="#ffffff" fill-opacity="0.22"/>
+  </defs>
+
+  <!-- ===== background ===== -->
+  <rect width="1200" height="420" rx="24" fill="#0b0f14"/>
+  <rect width="1200" height="420" rx="24" fill="url(#grid)"/>
+  <ellipse cx="700" cy="210" rx="520" ry="260" fill="url(#haloblue)"/>
+  <rect width="1200" height="420" rx="24" fill="url(#vig)"/>
+  <rect x="0.5" y="0.5" width="1199" height="419" rx="23.5" fill="none" stroke="#ffffff" stroke-opacity="0.07"/>
+
+  <!-- ===== matrix panel ===== -->
+  <ellipse cx="236" cy="210" rx="260" ry="220" fill="url(#halo)"/>
+  <rect x="76" y="50" width="320" height="320" rx="30" fill="url(#panel)" stroke="#232c38" stroke-width="1.5"/>
+  <rect x="77.5" y="51.5" width="317" height="317" rx="29" fill="none" stroke="#ffffff" stroke-opacity="0.04"/>
+  <!-- corner screws -->
+  <g fill="#1a212b" stroke="#2b3644" stroke-width="1">
+    <circle cx="94" cy="68" r="4.5"/><circle cx="378" cy="68" r="4.5"/>
+    <circle cx="94" cy="352" r="4.5"/><circle cx="378" cy="352" r="4.5"/>
+  </g>
+
+  <!-- glow layer (blurred copies) -->
+  <g filter="url(#softglow)" opacity="0.9">
+    <g fill="#ffd200">
+      <use xlink:href="#cell" x="100" y="74"/><use xlink:href="#cell" x="172" y="74"/><use xlink:href="#cell" x="244" y="74"/><use xlink:href="#cell" x="316" y="74"/>
+      <use xlink:href="#cell" x="100" y="146"/><use xlink:href="#cell" x="316" y="146"/>
+      <use xlink:href="#cell" x="100" y="218"/><use xlink:href="#cell" x="316" y="218"/>
+      <use xlink:href="#cell" x="100" y="290"/><use xlink:href="#cell" x="172" y="290"/><use xlink:href="#cell" x="244" y="290"/><use xlink:href="#cell" x="316" y="290"/>
+    </g>
+    <g fill="#ff6400" class="inner">
+      <use xlink:href="#cell" x="172" y="146"/><use xlink:href="#cell" x="244" y="146"/>
+      <use xlink:href="#cell" x="172" y="218"/><use xlink:href="#cell" x="244" y="218"/>
+    </g>
+  </g>
+
+  <!-- crisp cells -->
+  <g filter="url(#glow)">
+    <g fill="#ffd200">
+      <use xlink:href="#cell" x="100" y="74"/><use xlink:href="#cell" x="172" y="74"/><use xlink:href="#cell" x="244" y="74"/><use xlink:href="#cell" x="316" y="74"/>
+      <use xlink:href="#cell" x="100" y="146"/><use xlink:href="#cell" x="316" y="146"/>
+      <use xlink:href="#cell" x="100" y="218"/><use xlink:href="#cell" x="316" y="218"/>
+      <use xlink:href="#cell" x="100" y="290"/><use xlink:href="#cell" x="172" y="290"/><use xlink:href="#cell" x="244" y="290"/><use xlink:href="#cell" x="316" y="290"/>
+    </g>
+    <g fill="#ff6400" class="inner">
+      <use xlink:href="#cell" x="172" y="146"/><use xlink:href="#cell" x="244" y="146"/>
+      <use xlink:href="#cell" x="172" y="218"/><use xlink:href="#cell" x="244" y="218"/>
+    </g>
+  </g>
+  <!-- specular highlights -->
+  <g>
+    <use xlink:href="#spec" x="100" y="74"/><use xlink:href="#spec" x="172" y="74"/><use xlink:href="#spec" x="244" y="74"/><use xlink:href="#spec" x="316" y="74"/>
+    <use xlink:href="#spec" x="100" y="146"/><use xlink:href="#spec" x="172" y="146"/><use xlink:href="#spec" x="244" y="146"/><use xlink:href="#spec" x="316" y="146"/>
+    <use xlink:href="#spec" x="100" y="218"/><use xlink:href="#spec" x="172" y="218"/><use xlink:href="#spec" x="244" y="218"/><use xlink:href="#spec" x="316" y="218"/>
+    <use xlink:href="#spec" x="100" y="290"/><use xlink:href="#spec" x="172" y="290"/><use xlink:href="#spec" x="244" y="290"/><use xlink:href="#spec" x="316" y="290"/>
+  </g>
+
+  <!-- caption under panel -->
+  <text class="t cap" x="236" y="396" text-anchor="middle">0x04 · MODERATE (DEGRADING)</text>
+
+  <!-- ===== wordmark block ===== -->
+  <g>
+    <!-- small status dot + eyebrow -->
+    <circle cx="468" cy="112" r="5" fill="#6ee7f9" filter="url(#glow)"/>
+    <text class="t cap" x="484" y="117" fill="#6ee7f9" style="fill:#6ee7f9">WIRELESS AQI DISPLAY</text>
+
+    <!-- wordmark: glow copy + crisp -->
+    <text class="t wm" x="458" y="204" fill="#96b4ff" fill-opacity="0.45" filter="url(#softglow)">neoncore</text>
+    <text class="t wm" x="458" y="204" fill="url(#wmg)">neoncore</text>
+
+    <!-- accent rule -->
+    <rect x="462" y="222" width="160" height="2" rx="1" fill="url(#rule)"/>
+
+    <text class="t tag" x="462" y="262">Ambient air-quality indicator · ESP32 + WS2812B</text>
+
+    <!-- pills -->
+    <g class="t pill">
+      <rect x="462" y="292" width="104" height="34" rx="17" fill="#121a24" stroke="#243040" stroke-width="1"/>
+      <text x="514" y="314" text-anchor="middle">13 states</text>
+
+      <rect x="578" y="292" width="156" height="34" rx="17" fill="#121a24" stroke="#243040" stroke-width="1"/>
+      <text x="656" y="314" text-anchor="middle">TCP contract v2</text>
+
+      <rect x="746" y="292" width="200" height="34" rx="17" fill="#121a24" stroke="#243040" stroke-width="1"/>
+      <text x="846" y="314" text-anchor="middle">AirGradient companion</text>
+    </g>
+
+    <!-- contract colour swatches -->
+    <g transform="translate(462 356)">
+      <g filter="url(#glow)">
+        <rect x="0" y="0" width="22" height="8" rx="4" fill="#00b400"/>
+        <rect x="28" y="0" width="22" height="8" rx="4" fill="#ffd200"/>
+        <rect x="56" y="0" width="22" height="8" rx="4" fill="#ff6400"/>
+        <rect x="84" y="0" width="22" height="8" rx="4" fill="#ff0000"/>
+        <rect x="112" y="0" width="22" height="8" rx="4" fill="#8c008c"/>
+        <rect x="140" y="0" width="22" height="8" rx="4" fill="#dc0000"/>
+        <rect x="168" y="0" width="22" height="8" rx="4" fill="#96b4ff"/>
+      </g>
+      <text class="t cap" x="206" y="9">EXCELLENT → EXTREME · STANDBY</text>
+    </g>
+  </g>
+
+  <!-- ===== spec column ===== -->
+  <g>
+    <rect x="1000" y="118" width="1" height="192" fill="#ffffff" fill-opacity="0.08"/>
+    <g class="t">
+      <text class="cap" x="1026" y="146">MATRIX</text>
+      <text class="pill" x="1026" y="168" style="font-size:15px">4 × 4 WS2812B</text>
+      <text class="cap" x="1026" y="212">DATA</text>
+      <text class="pill" x="1026" y="234" style="font-size:15px">GPIO4 · 470 Ω</text>
+      <text class="cap" x="1026" y="278">LINK</text>
+      <text class="pill" x="1026" y="300" style="font-size:15px">TCP · port 7777</text>
+    </g>
+  </g>
+</svg>

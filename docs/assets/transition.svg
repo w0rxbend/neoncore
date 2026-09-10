@@ -1,0 +1,182 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1200" height="360" viewBox="0 0 1200 360" font-family="Inter, 'Segoe UI', system-ui, -apple-system, sans-serif">
+  <title>neoncore — status change transition: wipe, hold, steady</title>
+  <defs>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="7" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <rect id="cell" width="50" height="50" rx="11"/>
+    <linearGradient id="wipeGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#FF0000"/>
+      <stop offset="1" stop-color="#00B400"/>
+    </linearGradient>
+  </defs>
+
+  <!-- background -->
+  <rect width="1200" height="360" fill="#0b0f14"/>
+
+  <!-- brand mark -->
+  <circle cx="1094" cy="38" r="3.5" fill="#6EE7F9"/>
+  <text x="1106" y="42" font-size="12" font-weight="600" letter-spacing="2.5" fill="#5b6a7c">NEONCORE</text>
+
+  <!-- device frame -->
+  <rect x="48" y="48" width="264" height="264" rx="28" fill="#10161e" stroke="#1c2632" stroke-width="1.5"/>
+  <!-- unlit base cells -->
+  <g fill="#121a23" stroke="#1b2531" stroke-width="1">
+    <use xlink:href="#cell" x="62" y="62"/><use xlink:href="#cell" x="124" y="62"/><use xlink:href="#cell" x="186" y="62"/><use xlink:href="#cell" x="248" y="62"/>
+    <use xlink:href="#cell" x="62" y="124"/><use xlink:href="#cell" x="124" y="124"/><use xlink:href="#cell" x="186" y="124"/><use xlink:href="#cell" x="248" y="124"/>
+    <use xlink:href="#cell" x="62" y="186"/><use xlink:href="#cell" x="124" y="186"/><use xlink:href="#cell" x="186" y="186"/><use xlink:href="#cell" x="248" y="186"/>
+    <use xlink:href="#cell" x="62" y="248"/><use xlink:href="#cell" x="124" y="248"/><use xlink:href="#cell" x="186" y="248"/><use xlink:href="#cell" x="248" y="248"/>
+  </g>
+
+  <!-- lit cells: red (Unhealthy) -> wipe green from top-right, 1 LED / 40 ms -> hold -> steady (inner 2x2 only) -->
+  <!-- loop = 4.0 s : prev 0-0.75 | wipe 0.75-1.39 | hold 1.39-1.99 | steady 1.99-4.0 -->
+  <g filter="url(#glow)">
+    <!-- row 0, right -> left -->
+    <use xlink:href="#cell" x="248" y="62" fill="#FF0000">
+      <animate attributeName="fill" calcMode="discrete" values="#FF0000;#00B400" keyTimes="0;0.1875" dur="4s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" calcMode="discrete" values="1;0" keyTimes="0;0.4975" dur="4s" repeatCount="indefinite"/>
+    </use>
+    <use xlink:href="#cell" x="186" y="62" fill="#FF0000">
+      <animate attributeName="fill" calcMode="discrete" values="#FF0000;#00B400" keyTimes="0;0.1975" dur="4s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" calcMode="discrete" values="1;0" keyTimes="0;0.4975" dur="4s" repeatCount="indefinite"/>
+    </use>
+    <use xlink:href="#cell" x="124" y="62" fill="#FF0000">
+      <animate attributeName="fill" calcMode="discrete" values="#FF0000;#00B400" keyTimes="0;0.2075" dur="4s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" calcMode="discrete" values="1;0" keyTimes="0;0.4975" dur="4s" repeatCount="indefinite"/>
+    </use>
+    <use xlink:href="#cell" x="62" y="62" fill="#FF0000">
+      <animate attributeName="fill" calcMode="discrete" values="#FF0000;#00B400" keyTimes="0;0.2175" dur="4s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" calcMode="discrete" values="1;0" keyTimes="0;0.4975" dur="4s" repeatCount="indefinite"/>
+    </use>
+    <!-- row 1, right -> left -->
+    <use xlink:href="#cell" x="248" y="124" fill="#FF0000">
+      <animate attributeName="fill" calcMode="discrete" values="#FF0000;#00B400" keyTimes="0;0.2275" dur="4s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" calcMode="discrete" values="1;0" keyTimes="0;0.4975" dur="4s" repeatCount="indefinite"/>
+    </use>
+    <use xlink:href="#cell" x="186" y="124" fill="#FF0000">
+      <animate attributeName="fill" calcMode="discrete" values="#FF0000;#00B400" keyTimes="0;0.2375" dur="4s" repeatCount="indefinite"/>
+    </use>
+    <use xlink:href="#cell" x="124" y="124" fill="#FF0000">
+      <animate attributeName="fill" calcMode="discrete" values="#FF0000;#00B400" keyTimes="0;0.2475" dur="4s" repeatCount="indefinite"/>
+    </use>
+    <use xlink:href="#cell" x="62" y="124" fill="#FF0000">
+      <animate attributeName="fill" calcMode="discrete" values="#FF0000;#00B400" keyTimes="0;0.2575" dur="4s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" calcMode="discrete" values="1;0" keyTimes="0;0.4975" dur="4s" repeatCount="indefinite"/>
+    </use>
+    <!-- row 2, right -> left -->
+    <use xlink:href="#cell" x="248" y="186" fill="#FF0000">
+      <animate attributeName="fill" calcMode="discrete" values="#FF0000;#00B400" keyTimes="0;0.2675" dur="4s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" calcMode="discrete" values="1;0" keyTimes="0;0.4975" dur="4s" repeatCount="indefinite"/>
+    </use>
+    <use xlink:href="#cell" x="186" y="186" fill="#FF0000">
+      <animate attributeName="fill" calcMode="discrete" values="#FF0000;#00B400" keyTimes="0;0.2775" dur="4s" repeatCount="indefinite"/>
+    </use>
+    <use xlink:href="#cell" x="124" y="186" fill="#FF0000">
+      <animate attributeName="fill" calcMode="discrete" values="#FF0000;#00B400" keyTimes="0;0.2875" dur="4s" repeatCount="indefinite"/>
+    </use>
+    <use xlink:href="#cell" x="62" y="186" fill="#FF0000">
+      <animate attributeName="fill" calcMode="discrete" values="#FF0000;#00B400" keyTimes="0;0.2975" dur="4s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" calcMode="discrete" values="1;0" keyTimes="0;0.4975" dur="4s" repeatCount="indefinite"/>
+    </use>
+    <!-- row 3, right -> left -->
+    <use xlink:href="#cell" x="248" y="248" fill="#FF0000">
+      <animate attributeName="fill" calcMode="discrete" values="#FF0000;#00B400" keyTimes="0;0.3075" dur="4s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" calcMode="discrete" values="1;0" keyTimes="0;0.4975" dur="4s" repeatCount="indefinite"/>
+    </use>
+    <use xlink:href="#cell" x="186" y="248" fill="#FF0000">
+      <animate attributeName="fill" calcMode="discrete" values="#FF0000;#00B400" keyTimes="0;0.3175" dur="4s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" calcMode="discrete" values="1;0" keyTimes="0;0.4975" dur="4s" repeatCount="indefinite"/>
+    </use>
+    <use xlink:href="#cell" x="124" y="248" fill="#FF0000">
+      <animate attributeName="fill" calcMode="discrete" values="#FF0000;#00B400" keyTimes="0;0.3275" dur="4s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" calcMode="discrete" values="1;0" keyTimes="0;0.4975" dur="4s" repeatCount="indefinite"/>
+    </use>
+    <use xlink:href="#cell" x="62" y="248" fill="#FF0000">
+      <animate attributeName="fill" calcMode="discrete" values="#FF0000;#00B400" keyTimes="0;0.3375" dur="4s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" calcMode="discrete" values="1;0" keyTimes="0;0.4975" dur="4s" repeatCount="indefinite"/>
+    </use>
+  </g>
+
+  <!-- wipe origin marker (top-right cell) -->
+  <g opacity="0">
+    <animate attributeName="opacity" calcMode="discrete" values="0;1;0" keyTimes="0;0.1875;0.3475" dur="4s" repeatCount="indefinite"/>
+    <path d="M318 56 L304 70" stroke="#6EE7F9" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+    <circle cx="304" cy="70" r="2.5" fill="#6EE7F9"/>
+    <text x="322" y="54" font-size="11" fill="#6EE7F9" letter-spacing="0.5">starts top-right</text>
+  </g>
+
+  <!-- phase caption under matrix -->
+  <g font-size="13" text-anchor="middle" font-weight="500">
+    <text x="180" y="343" fill="#FF6B6B" opacity="1">
+      <animate attributeName="opacity" calcMode="discrete" values="1;0" keyTimes="0;0.1875" dur="4s" repeatCount="indefinite"/>0x07 Unhealthy · steady</text>
+    <text x="180" y="343" fill="#6EE7F9" opacity="0">
+      <animate attributeName="opacity" calcMode="discrete" values="0;1;0" keyTimes="0;0.1875;0.3475" dur="4s" repeatCount="indefinite"/>wipe · 1 LED every 40 ms</text>
+    <text x="180" y="343" fill="#6EE7F9" opacity="0">
+      <animate attributeName="opacity" calcMode="discrete" values="0;1;0" keyTimes="0;0.3475;0.4975" dur="4s" repeatCount="indefinite"/>hold · solid 600 ms</text>
+    <text x="180" y="343" fill="#4ADE80" opacity="0">
+      <animate attributeName="opacity" calcMode="discrete" values="0;1" keyTimes="0;0.4975" dur="4s" repeatCount="indefinite"/>0x00 Excellent · steady</text>
+  </g>
+
+  <!-- title block -->
+  <text x="400" y="86" font-size="30" font-weight="700" letter-spacing="-0.5" fill="#f2f5f9">On change: wipe → hold → steady</text>
+  <text x="400" y="114" font-size="15" fill="#8b98a8">Same status repeated = heartbeat, no animation.</text>
+
+  <!-- from -> to -->
+  <g font-size="14" fill="#c9d2dd">
+    <text x="400" y="160" fill="#5b6a7c" font-size="12" font-weight="600" letter-spacing="1.5">FROM</text>
+    <circle cx="452" cy="155" r="5.5" fill="#FF0000"/>
+    <text x="465" y="160" font-weight="600">0x07 Unhealthy</text>
+    <text x="596" y="160" fill="#5b6a7c">→</text>
+    <text x="628" y="160" fill="#5b6a7c" font-size="12" font-weight="600" letter-spacing="1.5">TO</text>
+    <circle cx="662" cy="155" r="5.5" fill="#00B400"/>
+    <text x="675" y="160" font-weight="600">0x00 Excellent</text>
+    <text x="796" y="160" fill="#5b6a7c" font-size="13">inner 2x2 · green</text>
+  </g>
+
+  <!-- timeline bar (x maps to time, segments widened for legibility) -->
+  <!-- prev 400-508 | wipe 512-698 | hold 702-878 | steady 882-1140 -->
+  <g>
+    <rect x="400" y="236" width="108" height="12" rx="6" fill="#FF0000" opacity="1">
+      <animate attributeName="opacity" calcMode="discrete" values="0.9;0.28" keyTimes="0;0.1875" dur="4s" repeatCount="indefinite"/>
+    </rect>
+    <rect x="512" y="236" width="186" height="12" rx="6" fill="url(#wipeGrad)" opacity="0.28">
+      <animate attributeName="opacity" calcMode="discrete" values="0.28;0.95;0.28" keyTimes="0;0.1875;0.3475" dur="4s" repeatCount="indefinite"/>
+    </rect>
+    <rect x="702" y="236" width="176" height="12" rx="6" fill="#00B400" opacity="0.28">
+      <animate attributeName="opacity" calcMode="discrete" values="0.28;0.95;0.28" keyTimes="0;0.3475;0.4975" dur="4s" repeatCount="indefinite"/>
+    </rect>
+    <rect x="882" y="236" width="258" height="12" rx="6" fill="#00B400" opacity="0.28">
+      <animate attributeName="opacity" calcMode="discrete" values="0.28;0.6" keyTimes="0;0.4975" dur="4s" repeatCount="indefinite"/>
+    </rect>
+  </g>
+
+  <!-- segment labels -->
+  <g font-size="14" font-weight="600" text-anchor="middle" fill="#c9d2dd">
+    <text x="454" y="272" fill="#8b98a8" font-weight="500">previous</text>
+    <text x="605" y="272">wipe 640 ms</text>
+    <text x="790" y="272">hold 600 ms</text>
+    <text x="1011" y="272">steady</text>
+  </g>
+  <!-- time markers under boundaries -->
+  <g font-size="11" text-anchor="middle" fill="#5b6a7c">
+    <text x="510" y="292">0 ms</text>
+    <text x="700" y="292">640 ms</text>
+    <text x="880" y="292">1240 ms</text>
+  </g>
+  <!-- boundary ticks -->
+  <g stroke="#2a3644" stroke-width="1">
+    <path d="M510 252 V279"/><path d="M700 252 V279"/><path d="M880 252 V279"/>
+  </g>
+
+  <!-- playhead -->
+  <g transform="translate(400 0)">
+    <animateTransform attributeName="transform" type="translate" calcMode="linear"
+      values="400 0;510 0;700 0;880 0;1140 0" keyTimes="0;0.1875;0.3475;0.4975;1" dur="4s" repeatCount="indefinite"/>
+    <path d="M-5 220 L5 220 L0 228 Z" fill="#6EE7F9"/>
+    <path d="M0 226 V256" stroke="#6EE7F9" stroke-width="2" stroke-linecap="round"/>
+  </g>
+
+  <!-- footnote -->
+  <text x="400" y="322" font-size="12.5" fill="#5b6a7c">Wipe: row 0 right→left, then rows 1–3 · 16 LEDs × 40 ms = 640 ms · after the hold, the target pattern settles</text>
+</svg>

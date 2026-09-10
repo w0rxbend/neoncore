@@ -75,6 +75,7 @@ def main():
 
     try:
         with socket.create_connection((args.host, args.port), timeout=5) as sock:
+            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             for code, name, visual, thresholds in AQI_LEVELS:
                 print(f"  0x{code:02X} {name:<22} {visual:<34} {thresholds} ... ", end="", flush=True)
                 print("OK" if set_aqi_status(sock, code) else "FAILED")

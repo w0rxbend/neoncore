@@ -1,0 +1,127 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1100" height="332" viewBox="0 0 1100 332" font-family="Inter, 'Segoe UI', system-ui, -apple-system, sans-serif">
+  <title>neoncore protocol v2 — frame layout</title>
+  <defs>
+    <filter id="glow" x="-20%" y="-40%" width="140%" height="180%">
+      <feGaussianBlur stdDeviation="3" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <pattern id="hatch" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <line x1="0" y1="0" x2="0" y2="10" stroke="#FF6400" stroke-width="1.2" stroke-opacity="0.35"/>
+    </pattern>
+    <style>
+      .hx { font-family: "JetBrains Mono", "SF Mono", Menlo, Consolas, "Liberation Mono", monospace; }
+      .lbl { font-size: 11px; fill: #8b949e; letter-spacing: 0.04em; }
+      .off { font-size: 12px; fill: #8b949e; }
+      .cap { font-size: 12px; fill: #c9d1d9; }
+      .capd { font-size: 11px; fill: #8b949e; }
+      .t { font-size: 13px; font-weight: 600; fill: #e6edf3; letter-spacing: 0.18em; }
+      .big { font-size: 17px; font-weight: 700; }
+      .mid { font-size: 15px; font-weight: 700; }
+      .sub { font-size: 10.5px; letter-spacing: 0.06em; }
+    </style>
+  </defs>
+
+  <rect width="1100" height="332" fill="#0b0f14"/>
+
+  <!-- title -->
+  <text x="82" y="34" class="t">NEONCORE · PROTOCOL v2 · FRAME LAYOUT</text>
+  <text x="1018" y="34" text-anchor="end" class="lbl">TCP · PORT 7777 · ONE REQUEST → ONE RESPONSE</text>
+
+  <!-- ===== Row 1: layout ===== -->
+  <text x="40" y="86" class="lbl" text-anchor="middle" transform="rotate(-90 40 86)">LAYOUT</text>
+  <g filter="url(#glow)">
+    <!-- magic L -->
+    <rect x="82" y="56" width="108" height="52" rx="7" fill="#96B4FF" fill-opacity="0.10" stroke="#96B4FF" stroke-width="1.5"/>
+    <!-- magic M -->
+    <rect x="198" y="56" width="108" height="52" rx="7" fill="#96B4FF" fill-opacity="0.10" stroke="#96B4FF" stroke-width="1.5"/>
+    <!-- version -->
+    <rect x="314" y="56" width="108" height="52" rx="7" fill="#8b949e" fill-opacity="0.10" stroke="#8b949e" stroke-width="1.5"/>
+    <!-- command -->
+    <rect x="430" y="56" width="108" height="52" rx="7" fill="#6EE7F9" fill-opacity="0.10" stroke="#6EE7F9" stroke-width="1.5"/>
+    <!-- length -->
+    <rect x="546" y="56" width="108" height="52" rx="7" fill="#FFD200" fill-opacity="0.10" stroke="#FFD200" stroke-width="1.5"/>
+    <!-- payload -->
+    <rect x="662" y="56" width="240" height="52" rx="7" fill="#FF6400" fill-opacity="0.08" stroke="#FF6400" stroke-width="1.5"/>
+    <rect x="662" y="56" width="240" height="52" rx="7" fill="url(#hatch)"/>
+    <!-- checksum -->
+    <rect x="910" y="56" width="108" height="52" rx="7" fill="#8C008C" fill-opacity="0.18" stroke="#B84FB8" stroke-width="1.5"/>
+  </g>
+  <g text-anchor="middle">
+    <text x="136" y="78" class="hx big" fill="#96B4FF">0x4C</text>
+    <text x="136" y="97" class="sub" fill="#96B4FF">MAGIC 'L'</text>
+    <text x="252" y="78" class="hx big" fill="#96B4FF">0x4D</text>
+    <text x="252" y="97" class="sub" fill="#96B4FF">MAGIC 'M'</text>
+    <text x="368" y="78" class="hx big" fill="#c9d1d9">0x02</text>
+    <text x="368" y="97" class="sub" fill="#8b949e">VERSION</text>
+    <text x="484" y="78" class="hx big" fill="#6EE7F9">cmd</text>
+    <text x="484" y="97" class="sub" fill="#6EE7F9">COMMAND</text>
+    <text x="600" y="78" class="hx big" fill="#FFD200">N</text>
+    <text x="600" y="97" class="sub" fill="#FFD200">LENGTH</text>
+    <text x="782" y="78" class="hx big" fill="#FF9A5C">payload</text>
+    <text x="782" y="97" class="sub" fill="#FF9A5C">N BYTES · COMMAND-SPECIFIC</text>
+    <text x="964" y="78" class="hx big" fill="#D98BD9">xor</text>
+    <text x="964" y="97" class="sub" fill="#D98BD9">CHECKSUM</text>
+  </g>
+  <!-- offsets -->
+  <g class="off hx" text-anchor="middle">
+    <text x="136" y="128">0</text>
+    <text x="252" y="128">1</text>
+    <text x="368" y="128">2</text>
+    <text x="484" y="128">3</text>
+    <text x="600" y="128">4</text>
+    <text x="782" y="128">5 … 4+N</text>
+    <text x="964" y="128">5+N</text>
+  </g>
+  <text x="1030" y="128" class="lbl">OFFSET</text>
+  <text x="82" y="150" class="capd">checksum = XOR of every preceding byte (offsets 0 … 4+N) · frame size = 6 + N bytes</text>
+
+  <!-- ===== Row 2: example ===== -->
+  <text x="40" y="196" class="lbl" text-anchor="middle" transform="rotate(-90 40 196)">EXAMPLE</text>
+  <text x="82" y="171" class="cap"><tspan fill="#e6edf3" font-weight="600">SET_AQI_STATUS(Moderate)</tspan><tspan fill="#8b949e"> · 7 bytes on the wire</tspan></text>
+  <g>
+    <rect x="82"  y="178" width="108" height="40" rx="6" fill="#96B4FF" fill-opacity="0.08" stroke="#96B4FF" stroke-opacity="0.7" stroke-width="1.2"/>
+    <rect x="198" y="178" width="108" height="40" rx="6" fill="#96B4FF" fill-opacity="0.08" stroke="#96B4FF" stroke-opacity="0.7" stroke-width="1.2"/>
+    <rect x="314" y="178" width="108" height="40" rx="6" fill="#8b949e" fill-opacity="0.08" stroke="#8b949e" stroke-opacity="0.7" stroke-width="1.2"/>
+    <rect x="430" y="178" width="108" height="40" rx="6" fill="#6EE7F9" fill-opacity="0.08" stroke="#6EE7F9" stroke-opacity="0.7" stroke-width="1.2"/>
+    <rect x="546" y="178" width="108" height="40" rx="6" fill="#FFD200" fill-opacity="0.08" stroke="#FFD200" stroke-opacity="0.7" stroke-width="1.2"/>
+    <rect x="662" y="178" width="240" height="40" rx="6" fill="#FF6400" fill-opacity="0.08" stroke="#FF6400" stroke-opacity="0.7" stroke-width="1.2"/>
+    <rect x="910" y="178" width="108" height="40" rx="6" fill="#8C008C" fill-opacity="0.16" stroke="#B84FB8" stroke-opacity="0.8" stroke-width="1.2"/>
+  </g>
+  <g text-anchor="middle" class="hx mid">
+    <text x="136" y="204" fill="#96B4FF">4C</text>
+    <text x="252" y="204" fill="#96B4FF">4D</text>
+    <text x="368" y="204" fill="#c9d1d9">02</text>
+    <text x="484" y="204" fill="#6EE7F9">03</text>
+    <text x="600" y="204" fill="#FFD200">01</text>
+    <text x="782" y="204" fill="#FF9A5C">03</text>
+    <text x="964" y="204" fill="#D98BD9">02</text>
+  </g>
+  <g text-anchor="middle" class="capd">
+    <text x="484" y="234">SET_AQI_STATUS</text>
+    <text x="600" y="234">N = 1</text>
+    <text x="782" y="234">status 0x03 · Moderate · yellow</text>
+    <text x="964" y="234">4C^4D^02^03^01^03</text>
+  </g>
+
+  <!-- ===== Row 3: response ===== -->
+  <text x="40" y="279" class="lbl" text-anchor="middle" transform="rotate(-90 40 279)">REPLY</text>
+  <text x="82" y="262" class="cap"><tspan fill="#e6edf3" font-weight="600">response</tspan><tspan fill="#8b949e"> · always 6 bytes · no length byte · byte 4 = result status (0x00 = OK)</tspan></text>
+  <g>
+    <rect x="82"  y="268" width="108" height="30" rx="5" fill="#96B4FF" fill-opacity="0.06" stroke="#96B4FF" stroke-opacity="0.5" stroke-width="1"/>
+    <rect x="198" y="268" width="108" height="30" rx="5" fill="#96B4FF" fill-opacity="0.06" stroke="#96B4FF" stroke-opacity="0.5" stroke-width="1"/>
+    <rect x="314" y="268" width="108" height="30" rx="5" fill="#8b949e" fill-opacity="0.06" stroke="#8b949e" stroke-opacity="0.5" stroke-width="1"/>
+    <rect x="430" y="268" width="108" height="30" rx="5" fill="#6EE7F9" fill-opacity="0.06" stroke="#6EE7F9" stroke-opacity="0.5" stroke-width="1"/>
+    <rect x="546" y="268" width="108" height="30" rx="5" fill="#FF6400" fill-opacity="0.06" stroke="#FF6400" stroke-opacity="0.5" stroke-width="1"/>
+    <rect x="662" y="268" width="108" height="30" rx="5" fill="#8C008C" fill-opacity="0.12" stroke="#B84FB8" stroke-opacity="0.6" stroke-width="1"/>
+  </g>
+  <g text-anchor="middle" class="hx" font-size="13" font-weight="600">
+    <text x="136" y="288" fill="#96B4FF">4C</text>
+    <text x="252" y="288" fill="#96B4FF">4D</text>
+    <text x="368" y="288" fill="#c9d1d9">02</text>
+    <text x="484" y="288" fill="#6EE7F9">80</text>
+    <text x="600" y="288" fill="#FF9A5C">status</text>
+    <text x="716" y="288" fill="#D98BD9">xor</text>
+  </g>
+  <text x="790" y="288" class="capd">0x80 = response id · OK (00) → checksum 83</text>
+  <text x="82" y="322" class="capd">same status repeated = heartbeat · standby after 60 s without SET_AQI_STATUS</text>
+</svg>
