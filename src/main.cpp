@@ -41,14 +41,20 @@ void runStartupAnimation() {
 }  // namespace
 
 void setup() {
-  WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
+  // See AppConfig::kDisableBrownoutDetector for the trade-off.
+  if (AppConfig::kDisableBrownoutDetector) {
+    WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
+  }
 
   Serial.begin(115200);
   delay(100);
 
   Serial.println();
-  Serial.println("ESP32 WS2812B TCP matrix controller");
-  Serial.println("LED data pin: GPIO4");
+  Serial.println("neoncore ESP32 WS2812B AQI indicator");
+  Serial.print("Protocol version: ");
+  Serial.println(MatrixProtocol::kVersion);
+  Serial.print("LED data pin: GPIO");
+  Serial.println(AppConfig::kLedPin);
   Serial.print("Matrix: ");
   Serial.print(AppConfig::kMatrixWidth);
   Serial.print("x");

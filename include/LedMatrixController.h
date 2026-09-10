@@ -4,13 +4,13 @@
 #include <Arduino.h>
 
 #include "AppConfig.h"
+#include "MatrixLayout.h"
 
-// High-level wrapper around Adafruit_NeoPixel.
+// Thin wrapper around Adafruit_NeoPixel.
 //
-// The rest of the application should talk in matrix concepts: clear the panel,
-// fill the panel, set logical x/y pixels, or push a complete RGB frame. This
-// class keeps those operations in one place and hides the WS2812B library plus
-// the physical serpentine wiring order.
+// The rest of the application talks in matrix concepts: clear, fill, set a
+// logical x/y pixel, or push a complete physical-order RGB frame. This class
+// keeps the WS2812B library and the panel-enabled flag in one place.
 class LedMatrixController {
  public:
   LedMatrixController();
@@ -35,20 +35,15 @@ class LedMatrixController {
   // configured matrix dimensions.
   bool setPixel(uint8_t x, uint8_t y, uint8_t red, uint8_t green, uint8_t blue);
 
-  // Pushes a full physical-order frame. The payload is 16 RGB triples for the
-  // current 4x4 matrix, ordered exactly as the LED chain is wired.
+  // Pushes a full physical-order frame of MatrixLayout::kFrameBytes bytes.
   bool setPhysicalFrame(const uint8_t* rgbFrame, uint16_t length);
 
  private:
-  // Converts logical coordinates into the LED chain index. Invalid coordinates
-  // return AppConfig::kLedCount, which is outside the valid range.
-  uint16_t toPhysicalIndex(uint8_t x, uint8_t y) const;
-
   // Re-renders the stored desired frame to the physical LEDs. When disabled,
   // this intentionally writes black while keeping frameRgb_ unchanged.
   void render();
 
   Adafruit_NeoPixel pixels_;
-  uint8_t frameRgb_[AppConfig::kLedCount * 3];
+  uint8_t frameRgb_[MatrixLayout::kFrameBytes];
   bool enabled_;
 };

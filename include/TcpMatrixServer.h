@@ -3,183 +3,66 @@
 #include <Arduino.h>
 #include <WiFi.h>
 
+#include "AqiDisplay.h"
 #include "LedMatrixController.h"
 #include "MatrixProtocol.h"
 
-// Coordinates Wi-Fi, TCP transport, protocol parsing, and matrix command
-// dispatch.
+// Coordinates Wi-Fi, the TCP listener, protocol parsing, and the AQI display.
 //
-// This class intentionally owns all network state. The main Arduino loop only
-// calls loop(), while this class decides whether to reconnect Wi-Fi, restart the
-// listener, accept a client, read bytes, and dispatch parsed commands.
+// This class owns all network state. The main Arduino loop only calls loop();
+// this class decides whether to reconnect Wi-Fi, (re)start the listener,
+// accept or drop a client, read bytes, dispatch commands, and refresh LEDs.
+// Nothing in loop() blocks.
 class TcpMatrixServer {
  public:
   explicit TcpMatrixServer(LedMatrixController& matrix);
 
-  // Starts Wi-Fi and starts the TCP listener if the network is ready.
+  // Configures Wi-Fi, starts the (non-blocking) connect, and enters standby.
   void begin();
 
-  // Must be called repeatedly from Arduino loop(). It never blocks for long.
+  // Must be called repeatedly from Arduino loop().
   void loop();
 
  private:
-  enum class EffectMode : uint8_t {
-    kDirect = 0,
-    kStatic,
-    kChase,
-    kColorWipe,
-    kBlink,
-    kWave,
-    kRain,
-    kMeteor,
-    kRainbow,
-    kBreathing,
-    kScanner,
-    kSparkle,
-    kFire,
-    kMatrixRain,
-    kRipple,
-    kTheaterChase,
-    kTwinkle,
-    kComet,
-    kPlasma,
-    kDiagonal,
-    kBorderChase,
-    kHeartbeat,
-    kPulseWipe,
-    kConfetti,
-    kCustom,
-    kAqiLevel,       // N LEDs lit from top-right, static
-    kAqiBreathing,   // N LEDs lit from top-right, breathing
-    kAqiBlink,       // N LEDs lit from top-right, blinking
-    kAqiInner,       // Inner 2×2 only, static
-    kAqiPerimeter,   // Outer 12 LEDs only, static
-    kAqiDualZone,    // Perimeter colour1 static + inner 2×2 colour2 breathing
-    kAqiAlternate,   // Full matrix alternating between colour1 and colour2
-  };
-
-  // Network startup and retry helpers.
+  // Wi-Fi.
   void startWifi();
+  void applyStaticIpIfConfigured();
+  void applyMacOverrideIfConfigured();
   void beginStationConnect();
   void startAccessPoint();
-  void handleWifiReconnect();
+  void updateWifi();
   bool hasStationCredentials() const;
   bool networkIsReady() const;
   IPAddress currentIpAddress() const;
   void printNetworkAddress() const;
 
-  // TCP listener lifecycle helpers.
+  // TCP listener and client lifecycle.
   void ensureServerRunning();
   void startServer();
   void stopServer();
-  void restartServer();
-  void acceptClientIfNeeded();
+  void acceptClientIfPending();
+  void dropClient(const char* reason);
+  void enableKeepAlive();
   void readClientBytes();
+  void expireStalledFrame(uint32_t nowMs);
 
-  // Streaming parser helpers.
-  void resetParser();
-  void parseByte(uint8_t value);
-  void processFrame();
-
-  // Converts a validated protocol frame into LED operations.
+  // Protocol.
   MatrixProtocol::Status applyCommand(uint8_t command, const uint8_t* payload, uint8_t length);
-
-  // Sends the compact 6-byte response frame back to the current TCP client.
   void sendStatus(MatrixProtocol::Status status);
 
-  // AQI status display.
-  void applyAqiStatus(uint8_t status);
-  void startAqiEffect(EffectMode mode, uint16_t intervalMs,
-                      uint8_t r, uint8_t g, uint8_t b,
-                      uint8_t r2 = 0, uint8_t g2 = 0, uint8_t b2 = 0);
-  void startStandby();
-  void updateStandby(uint32_t nowMs);
+  // Display.
+  void updateDisplay(uint32_t nowMs);
 
-  // AQI LED renderers.
-  void renderAqiLevel(uint32_t nowMs);
-  void renderAqiBreathing(uint32_t nowMs);
-  void renderAqiBlink(uint32_t nowMs);
-  void renderAqiInner(uint32_t nowMs);
-  void renderAqiPerimeter(uint32_t nowMs);
-  void renderAqiDualZone(uint32_t nowMs);
-  void renderAqiAlternate(uint32_t nowMs);
-
-  // Animation engine.
-  void updateAnimations();
-  void stopEffects();
-  void startEffect(EffectMode mode, uint16_t intervalMs, uint8_t red, uint8_t green, uint8_t blue);
-  bool applyCustomFrame(uint8_t frameIndex, uint8_t frameCount, uint16_t delayMs,
-                       const uint8_t* frameData);
-  void renderEffectFrame(uint32_t nowMs);
-  void renderStatic(uint32_t nowMs);
-  void renderChase(uint32_t nowMs);
-  void renderColorWipe(uint32_t nowMs);
-  void renderBlink(uint32_t nowMs);
-  void renderWave(uint32_t nowMs);
-  void renderRain(uint32_t nowMs);
-  void renderMeteor(uint32_t nowMs);
-  void renderRainbow(uint32_t nowMs);
-  void renderBreathing(uint32_t nowMs);
-  void renderScanner(uint32_t nowMs);
-  void renderSparkle(uint32_t nowMs);
-  void renderFire(uint32_t nowMs);
-  void renderMatrixRain(uint32_t nowMs);
-  void renderRipple(uint32_t nowMs);
-  void renderTheaterChase(uint32_t nowMs);
-  void renderTwinkle(uint32_t nowMs);
-  void renderComet(uint32_t nowMs);
-  void renderPlasma(uint32_t nowMs);
-  void renderDiagonal(uint32_t nowMs);
-  void renderBorderChase(uint32_t nowMs);
-  void renderHeartbeat(uint32_t nowMs);
-  void renderPulseWipe(uint32_t nowMs);
-  void renderConfetti(uint32_t nowMs);
-  void renderCustom(uint32_t nowMs);
-
-
-  // Matrix is injected so network code does not own LED hardware directly.
   LedMatrixController& matrix_;
+  Aqi::Display display_;
 
-  // TCP server/client objects. One connected client is enough for this
-  // controller and keeps RAM use predictable.
   WiFiServer server_;
   WiFiClient client_;
+  MatrixProtocol::FrameParser parser_;
 
-  // Parser state for one in-progress command frame.
-  uint8_t frameBuffer_[MatrixProtocol::kMaxFrameSize];
-  uint16_t frameIndex_;
-  uint16_t expectedFrameSize_;
-
-  // Retry/health state.
   bool serverStarted_;
+  bool stationConnected_;
   uint32_t lastWifiRetryMs_;
-  uint32_t lastServerHealthCheckMs_;
-
-  // Non-blocking animation state.
-  EffectMode effectMode_;
-  uint16_t effectIntervalMs_;
-  uint32_t lastEffectStepMs_;
-  uint8_t effectPhase_;
-  uint8_t effectColorRed_;
-  uint8_t effectColorGreen_;
-  uint8_t effectColorBlue_;
-  bool effectBlinkState_;
-  uint32_t effectSeed_;
-
-  // Custom animation state: one slot with multiple frames.
-  uint8_t customFrameCount_;
-  uint8_t customFrameExpectedCount_;
-  uint16_t customFrameDelayMs_[AppConfig::kMaxCustomFrames];
-  uint8_t customReceivedMask_;
-  uint8_t customCurrentFrame_;
-  uint8_t customFrameBuffer_[AppConfig::kMaxCustomFrames][AppConfig::kLedCount * 3];
-
-  // Standby / AQI state.
-  bool aqiStatusReceived_;
-  uint32_t lastAqiDataMs_;
-  uint8_t effectLedCount_;
-  // Secondary colour for dual-zone and alternating effects.
-  uint8_t effectColorRed2_;
-  uint8_t effectColorGreen2_;
-  uint8_t effectColorBlue2_;
+  uint32_t lastClientActivityMs_;
+  uint32_t lastClientByteMs_;
 };

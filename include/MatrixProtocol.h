@@ -1,20 +1,22 @@
 #pragma once
 
-#include <Arduino.h>
+#include <stdint.h>
 
 #include "AppConfig.h"
 
+// Wire protocol for the neoncore device. This header has no hardware
+// dependency so the parser can be unit-tested on the host.
 namespace MatrixProtocol {
 
-// The TCP protocol is intentionally tiny:
+// Every frame, command or response, uses the same envelope:
 //
 //   'L' 'M' version command payloadLength payload checksum
 //
-// A fixed header and a 1-byte payload length keep the protocol tiny.
-// Some commands need metadata, so the maximum payload is now 255 bytes.
+// A fixed 5-byte header, up to 255 payload bytes, and a 1-byte XOR checksum
+// over everything before it.
 constexpr uint8_t kMagic0 = 0x4C;
 constexpr uint8_t kMagic1 = 0x4D;
-constexpr uint8_t kVersion = 0x01;
+constexpr uint8_t kVersion = 0x02;
 constexpr uint8_t kResponseCommand = 0x80;
 constexpr uint16_t kMaxPayloadSize = 255;
 constexpr uint16_t kHeaderSize = 5;
@@ -22,80 +24,49 @@ constexpr uint16_t kChecksumSize = 1;
 constexpr uint16_t kMaxFrameSize = kHeaderSize + kMaxPayloadSize + kChecksumSize;
 constexpr uint16_t kResponseSize = 6;
 
+// Header byte offsets.
+constexpr uint16_t kCommandOffset = 3;
+constexpr uint16_t kLengthOffset = 4;
+constexpr uint16_t kPayloadOffset = 5;
+
+// Protocol version 2 is deliberately small: the device is an air-quality
+// indicator, not a general LED canvas. The display content is fully
+// determined by the AQI status; the other commands are device controls.
 enum class Command : uint8_t {
-  // Connectivity check. Does not change the matrix.
+  // Connectivity check. Payload: none. Does not change the display.
   kPing = 0x00,
 
-  // Clears all pixels to black.
-  kClear = 0x01,
+  // Global brightness. Payload: 1 byte, 0..255.
+  kSetBrightness = 0x01,
 
-  // Updates global brightness with one payload byte: 0..255.
-  kSetBrightness = 0x02,
+  // Blank or restore the panel without forgetting the current state.
+  // Payload: 1 byte, 0 = off, non-zero = on.
+  kSetPanelEnabled = 0x02,
 
-  // Fills the matrix with one RGB triple.
-  kFill = 0x03,
-
-  // Sets one logical x/y pixel using payload: x, y, r, g, b.
-  kSetPixel = 0x04,
-
-  // Replaces the full physical LED buffer using 16 RGB triples.
-  kSetFrame = 0x05,
-
-  // Turns visible panel output off/on without clearing the stored image.
-  kSetPanelEnabled = 0x06,
-
-  // Sets a single static color and keeps matrix in static mode.
-  kSetStaticColor = 0x07,
-
-  // Applies one preset effect.
-  kSetPresetEffect = 0x08,
-
-  // Uploads one frame for the single custom animation slot.
-  kUploadCustomFrame = 0x09,
-
-  // Stops any running effect and returns control to direct commands.
-  kStopEffect = 0x0A,
-
-  // Sets the AirGradient air-quality status. Payload: 1 byte AqiStatus code.
-  // Resets the standby timeout. If no kSetAqiStatus is received within
-  // AppConfig::kAqiStandbyTimeoutMs the display returns to standby breathing.
-  kSetAqiStatus = 0x0B,
+  // Air-quality status. Payload: 1 byte AqiStatus code.
+  // Resets the standby timeout. A changed status plays a transition
+  // animation before settling; the same status repeated is a heartbeat.
+  kSetAqiStatus = 0x03,
 };
 
-// Air-quality status codes for kSetAqiStatus.
-// Colors mirror the standard AirGradient ONE LED indicator scale.
-// 13 visually distinct air-quality statuses for a 4×4 LED matrix.
-// Each uses a unique combination of pattern, colour, and animation so it is
-// immediately identifiable at a glance.
-// The same code set covers both CO2 (ppm) and PM2.5 (µg/m³) — the sender
-// maps the sensor reading to the appropriate code before transmitting.
+// Air-quality status codes for kSetAqiStatus. The same code set covers both
+// CO2 (ppm) and PM2.5 (µg/m³); the sender maps the reading to a code.
 enum class AqiStatus : uint8_t {
-  // Green — Good air quality
-  kExcellent          = 0x00,  // Inner 2×2 green static   — CO2 0–400    / PM2.5 0–2
-  kGood               = 0x01,  // Full green static         — CO2 400–600  / PM2.5 2–5
-  kGoodDegrading      = 0x02,  // Full green breathing      — CO2 600–800  / PM2.5 5–9
-
-  // Yellow — Moderate
-  kModerate           = 0x03,  // Full yellow static        — CO2 800–1000 / PM2.5 9–15
-  kModerateDegrading  = 0x04,  // Perimeter yellow + inner 2×2 orange breathing
-                               //                           — CO2 1000–1250/ PM2.5 15–25
-
-  // Orange — Unhealthy for Sensitive Groups
-  kPoor               = 0x05,  // Full orange static        — CO2 1250–1500/ PM2.5 25–35.4
-  kPoorDegrading      = 0x06,  // Full orange breathing     — CO2 1500–1750/ PM2.5 35.4–45
-
-  // Red — Unhealthy
-  kUnhealthy          = 0x07,  // Full red static           — CO2 1750–2000/ PM2.5 45–55.4
-  kUnhealthyDegrading = 0x08,  // Full red breathing        — CO2 2000–2500/ PM2.5 55.4–75
-
-  // Purple — Very Unhealthy
-  kVeryUnhealthy      = 0x09,  // Full purple static        — CO2 2500–3000/ PM2.5 75–125
-  kVeryUnhealthyDeg   = 0x0A,  // Full purple breathing     — CO2 3000–4000/ PM2.5 125–200
-
-  // Hazardous
-  kHazardous          = 0x0B,  // Full purple blink         — CO2 4000–5000/ PM2.5 200–300
-  kExtreme            = 0x0C,  // Full purple/red fast alternating blink — CO2 >5000 / PM2.5 >300
+  kExcellent          = 0x00,  // Inner 2x2 green, static
+  kGood               = 0x01,  // Full green, static
+  kGoodDegrading      = 0x02,  // Full green, breathing
+  kModerate           = 0x03,  // Full yellow, static
+  kModerateDegrading  = 0x04,  // Yellow perimeter, orange inner 2x2 breathing
+  kPoor               = 0x05,  // Full orange, static
+  kPoorDegrading      = 0x06,  // Full orange, breathing
+  kUnhealthy          = 0x07,  // Full red, static
+  kUnhealthyDegrading = 0x08,  // Full red, breathing
+  kVeryUnhealthy      = 0x09,  // Full purple, static
+  kVeryUnhealthyDeg   = 0x0A,  // Full purple, breathing
+  kHazardous          = 0x0B,  // Full purple, blink 500 ms
+  kExtreme            = 0x0C,  // Full purple/red alternating 300 ms
 };
+constexpr uint8_t kAqiStatusCount = 13;
 
 enum class Status : uint8_t {
   // Command was valid and has been applied.
@@ -110,15 +81,60 @@ enum class Status : uint8_t {
   // Header was valid, but command id is not implemented.
   kUnknownCommand = 0x03,
 
-  // Command exists, but payload length or coordinate range is wrong.
+  // Command exists, but payload length is wrong for it.
   kInvalidLength = 0x04,
 
   // Frame arrived but did not pass the XOR checksum.
   kChecksumMismatch = 0x05,
+
+  // Payload length was right but a value is outside the contract, for
+  // example an AQI status code above 0x0C.
+  kInvalidArgument = 0x06,
 };
 
 // Simple corruption check for short LAN/AP packets. This is not cryptographic;
-// it only catches malformed or truncated frames before applying LED changes.
+// it only catches malformed or truncated frames before applying changes.
 uint8_t checksum(const uint8_t* data, uint16_t length);
+
+// Builds the 6-byte response frame for a status code into `out`.
+void buildResponse(Status status, uint8_t* out);
+
+// Byte-at-a-time frame parser. Feed it every received byte; when push()
+// returns kFrameReady the accessors describe the complete frame (checksum
+// already verified). When it returns kError, error() says what went wrong
+// and the parser has already reset itself.
+class FrameParser {
+ public:
+  enum class Result : uint8_t {
+    kNeedMore,
+    kFrameReady,
+    kError,
+  };
+
+  FrameParser();
+
+  void reset();
+  Result push(uint8_t value);
+
+  // True while a frame is partially buffered.
+  bool inProgress() const { return index_ > 0; }
+
+  // Valid after kError.
+  Status error() const { return error_; }
+
+  // Valid after kFrameReady.
+  uint8_t command() const { return buffer_[kCommandOffset]; }
+  uint8_t payloadLength() const { return buffer_[kLengthOffset]; }
+  const uint8_t* payload() const { return &buffer_[kPayloadOffset]; }
+
+ private:
+  Result fail(Status status);
+
+  uint8_t buffer_[kMaxFrameSize];
+  uint16_t index_;
+  uint16_t expectedSize_;
+  Status error_;
+  bool frameReady_;
+};
 
 }  // namespace MatrixProtocol

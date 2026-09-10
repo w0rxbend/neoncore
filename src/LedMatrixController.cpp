@@ -38,7 +38,7 @@ void LedMatrixController::fill(uint8_t red, uint8_t green, uint8_t blue) {
 }
 
 bool LedMatrixController::setPixel(uint8_t x, uint8_t y, uint8_t red, uint8_t green, uint8_t blue) {
-  const uint16_t ledIndex = toPhysicalIndex(x, y);
+  const uint16_t ledIndex = MatrixLayout::logicalToPhysical(x, y);
   if (ledIndex >= AppConfig::kLedCount) {
     return false;
   }
@@ -52,7 +52,7 @@ bool LedMatrixController::setPixel(uint8_t x, uint8_t y, uint8_t red, uint8_t gr
 }
 
 bool LedMatrixController::setPhysicalFrame(const uint8_t* rgbFrame, uint16_t length) {
-  if (length != AppConfig::kLedCount * 3) {
+  if (length != MatrixLayout::kFrameBytes) {
     return false;
   }
 
@@ -75,21 +75,4 @@ void LedMatrixController::render() {
   }
 
   pixels_.show();
-}
-
-uint16_t LedMatrixController::toPhysicalIndex(uint8_t x, uint8_t y) const {
-  if (x >= AppConfig::kMatrixWidth || y >= AppConfig::kMatrixHeight) {
-    return AppConfig::kLedCount;
-  }
-
-  // The 4x4 panel is wired in serpentine rows:
-  //   row 0: left -> right
-  //   row 1: right -> left
-  //   row 2: left -> right
-  //   row 3: right -> left
-  if (y % 2 == 0) {
-    return y * AppConfig::kMatrixWidth + x;
-  }
-
-  return y * AppConfig::kMatrixWidth + (AppConfig::kMatrixWidth - 1 - x);
 }

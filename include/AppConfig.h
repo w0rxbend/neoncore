@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Arduino.h>
+#include <stdint.h>
 
 // Keep private Wi-Fi credentials outside git. PlatformIO automatically adds
 // the include directory, so a local include/creds.h is enough.
@@ -20,7 +20,20 @@
 #define WIFI_PASSWORD ""
 #endif
 
-// Optional static IP. Define all four in creds.h to skip DHCP entirely.
+// Optional password for the fallback access point. Leave empty for an open
+// AP. WPA2 requires at least 8 characters; shorter values are ignored.
+#ifndef WIFI_AP_PASSWORD
+#define WIFI_AP_PASSWORD ""
+#endif
+
+// Optional: list nearby networks on the serial console during boot. Useful
+// when diagnosing a connection problem, but it adds a few seconds to boot.
+#ifndef WIFI_SCAN_ON_BOOT
+#define WIFI_SCAN_ON_BOOT 0
+#endif
+
+// Optional static IP. Define STATIC_IP, STATIC_GATEWAY and STATIC_SUBNET in
+// creds.h to skip DHCP. STATIC_DNS is optional and defaults to the gateway.
 // Leave undefined to use DHCP (default).
 //   #define STATIC_IP      "192.168.1.123"
 //   #define STATIC_GATEWAY "192.168.1.1"
@@ -44,19 +57,59 @@ constexpr uint16_t kLedCount = kMatrixWidth * kMatrixHeight;
 // default brightness is safe on USB power.
 constexpr uint8_t kDefaultBrightness = 40;
 
-// Give USB power, the external LED supply, and the ESP8266 radio a moment to
+// Give USB power, the external LED supply, and the ESP32 radio a moment to
 // settle before LEDs and Wi-Fi start drawing burst current.
 constexpr uint32_t kBootSettleDelayMs = 2000;
+
+// The ESP32 brown-out detector resets the chip when VDD dips below ~2.4 V.
+// Cheap USB supplies and the Wi-Fi radio's transmit bursts can trip it even
+// when the board is otherwise fine, so it is disabled by default. The cost is
+// that a genuinely sagging supply corrupts state instead of resetting; if
+// you see garbage on the LEDs or random hangs, re-enable it and fix the
+// power supply.
+constexpr bool kDisableBrownoutDetector = true;
 
 // Network behavior. Empty WIFI_SSID falls back to AP mode.
 constexpr uint16_t kTcpPort = 7777;
 constexpr char kAccessPointSsid[] = "led-matrix";
-constexpr uint32_t kStationConnectTimeoutMs = 60000;
-constexpr uint32_t kWifiRetryIntervalMs = 10000;
-constexpr uint32_t kServerHealthCheckIntervalMs = 5000;
-constexpr uint8_t kMaxCustomFrames = 8;
-constexpr uint16_t kDefaultPresetIntervalMs = 140;
-constexpr uint16_t kMinEffectFrameDelayMs = 20;
+constexpr bool kScanNetworksOnBoot = WIFI_SCAN_ON_BOOT != 0;
+
+// Wi-Fi station connect is non-blocking. If the link is not up after this
+// interval, WiFi.begin() is issued again.
+constexpr uint32_t kWifiRetryIntervalMs = 15000;
+
+// One TCP client at a time. A new connection replaces the current one.
+// A client that sends no complete frame for this long is dropped; send PING
+// to keep a long-lived connection open.
+constexpr uint32_t kClientIdleTimeoutMs = 90000;
+
+// A frame whose bytes stop arriving mid-way is discarded after this long so
+// the parser can re-synchronise on the next frame.
+constexpr uint32_t kFrameTimeoutMs = 2000;
+
+// Upper bound on bytes drained from the socket per loop pass, so a chatty
+// client cannot starve the animation engine.
+constexpr uint16_t kMaxClientBytesPerLoop = 256;
+
+// TCP keepalive on the accepted client so a peer that vanished without a
+// FIN (host power loss, cable pull) is detected within roughly
+// idle + interval * count seconds.
+constexpr int kTcpKeepAliveIdleSec = 10;
+constexpr int kTcpKeepAliveIntervalSec = 5;
+constexpr int kTcpKeepAliveCount = 3;
+
+// AQI presentation timing. Breathing uses a 16-step table, so a full
+// inhale/exhale cycle is 16 * step (1.28 s at 80 ms). Standby breathes at
+// the same rate.
+constexpr uint16_t kAqiBreathingStepMs = 80;
+constexpr uint16_t kAqiBlinkIntervalMs = 500;
+constexpr uint16_t kAqiAlternateIntervalMs = 300;
+
+// Transition played when the status changes: the new colour wipes across
+// the matrix one LED per step, then holds solid, then the steady pattern
+// for the new status begins. Total = 16 * wipe step + hold.
+constexpr uint16_t kAqiTransitionWipeStepMs = 40;
+constexpr uint16_t kAqiTransitionHoldMs = 600;
 
 // Standby: if no kSetAqiStatus is received within this window the display
 // returns to the white-blue breathing animation.
